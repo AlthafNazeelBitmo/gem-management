@@ -79,7 +79,7 @@ export function Purchasing({ workspace: w, role, open, execute }: Props) {
             Add supplier
           </button>
         )}
-        {owner && (
+        {owner && suppliers.length > 0 && (
           <>
             <button
               className="primary"
@@ -138,6 +138,9 @@ export function Purchasing({ workspace: w, role, open, execute }: Props) {
           </>
         )}
       </div>
+      {owner && !suppliers.length && (
+        <p className="info-note">Add a supplier before creating a purchase order or receiving supplier stock.</p>
+      )}
       <h2>Purchase orders</h2>
       {!orders.length ? (
         <div className="empty">

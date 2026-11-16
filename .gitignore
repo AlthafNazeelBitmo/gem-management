@@ -13,3 +13,6 @@ data/
 *-wal
 *-shm
 
+.neon
+.vercel
+.env*

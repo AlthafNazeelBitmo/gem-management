@@ -754,3 +754,36 @@ test("a valid but stale show event needs owner review before stock release", asy
     confirmedReconciled: true,
   });
 });
+
+test("a retry of an unconfirmed command returns the original receipt without a duplicate", async () => {
+  const owner = sessions.owner;
+  const key = "c0994538-ae87-4f28-ace5-0a6489b9d2ff";
+  const send = (name) => fetch(base + "/api/commands/customer", {
+    method: "POST",
+    headers: { Cookie: owner.cookie, "X-CSRF-Token": owner.csrf, "Content-Type": "application/json", "Idempotency-Key": key },
+    body: JSON.stringify({ name }),
+  });
+  const [first, retry] = await Promise.all([send("Receipt fixture"), send("Receipt fixture")]);
+  assert.equal(first.status, 200);
+  assert.equal(retry.status, 200);
+  assert.deepEqual(await first.json(), await retry.json());
+  assert.equal((await send("Different fixture")).status, 409);
+  assert.equal((await workspace()).customers.filter((entry) => entry.name === "Receipt fixture").length, 1);
+});
+
+test("buyer retries deduplicate identical decisions while allowing explicit changes", async () => {
+  const stock = await release(await command("owner", "receive", {
+    variety: "Buyer retry fixture", shape: "Oval", carats: "1.000",
+    location: "Fixture vault", ownershipConfirmed: true,
+  }));
+  const selection = await command("owner", "selection", {
+    customerId: customer.id, title: "Buyer retry fixture", stoneIds: [stock.id],
+  });
+  const url = "/api/buyer/" + selection.token;
+  const same = { decision: "Interested", note: "Fixture response" };
+  await call(null, url, same);
+  await call(null, url, same);
+  await call(null, url, { decision: "Decline", note: "Changed decision" });
+  const result = await call(null, url);
+  assert.deepEqual(result.decisions.map((entry) => entry.decision), ["Interested", "Decline"]);
+});

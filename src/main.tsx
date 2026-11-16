@@ -1,10 +1,12 @@
 import { countries, currencies, currencyDecimals } from "./setup-options";
+import { baseMoney } from "./money";
 import { Purchasing } from "./Purchasing";
 import { Table } from "./RecordsTable";
 import React, { useEffect, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 import {
   request,
+  ApiError,
   setCsrf,
   str,
   rows,
@@ -384,9 +386,9 @@ function formatStatusWord(val: string): string {
   }
 }
 
-function Badge({ value }: { value: unknown }) {
+function Badge({ value, evidence = false }: { value: unknown; evidence?: boolean }) {
   const v = String(value ?? "");
-  const word = formatStatusWord(v);
+  const word = evidence && v === "Approved" ? "Disclosure approved" : formatStatusWord(v);
 
   const isApproved = ["Approved", "Ready", "Reconciled"].includes(v);
   const isStock = ["In stock", "Stock"].includes(v);
@@ -502,6 +504,7 @@ type Field = {
   required?: boolean;
   options?: Option[];
   hint?: string;
+  validationLabel?: string;
 };
 export type FormSpec = {
   title: string;
@@ -513,43 +516,120 @@ export type FormSpec = {
     file: File | null,
   ) => Promise<void>;
 };
+function OptionChecklist({ field }: { field: Field }) {
+  const [filter, setFilter] = useState("");
+  const [chosen, setChosen] = useState<string[]>(() => JSON.parse(field.value || "[]"));
+  const options = field.options || [];
+  const matches = (option: Option) => option.label.toLowerCase().includes(filter.trim().toLowerCase());
+  return (
+    <fieldset className="option-checklist">
+      <legend>{field.label}{field.required === false ? " (optional)" : ""}</legend>
+      {options.length > 6 && <label>
+        Filter {field.label.toLowerCase()}
+        <input type="search" value={filter} onChange={(event) => setFilter(event.target.value)} />
+      </label>}
+      <p className="muted" role="status">{chosen.length} selected</p>
+      <div className="checklist-options">
+        {options.map((option) => (
+          <label className="check-label" key={option.value} hidden={!matches(option)}>
+            <input type="checkbox" name={field.key} value={option.value} checked={chosen.includes(option.value)}
+              onChange={(event) => setChosen((current) => event.target.checked
+                ? [...current, option.value] : current.filter((value) => value !== option.value))} />
+            {option.label}
+          </label>
+        ))}
+        {!options.some(matches) && <p className="muted">{options.length ? "No matching options." : "No options available."}</p>}
+      </div>
+    </fieldset>
+  );
+}
 function Editor({ spec, onClose }: { spec: FormSpec; onClose: () => void }) {
   const [error, setError] = useState("");
+  const [invalidField, setInvalidField] = useState("");
+  const formRef = useRef<HTMLFormElement>(null);
+  const errorId = React.useId();
   const [busy, setBusy] = useState(false);
+  const busyRef = useRef(false);
+  const [dirty, setDirty] = useState(false);
+  const [confirmDiscard, setConfirmDiscard] = useState(false);
+  const keepEditing = useRef<HTMLButtonElement>(null);
+  const editFocus = useRef<HTMLElement | null>(null);
+  const resumeEditing = () => {
+    setConfirmDiscard(false);
+    requestAnimationFrame(() => editFocus.current?.focus());
+  };
+  const errorRef = useRef<HTMLParagraphElement>(null);
+  useEffect(() => {
+    if (confirmDiscard) keepEditing.current?.focus();
+  }, [confirmDiscard]);
+  useEffect(() => {
+    if (!error) return;
+    const control = invalidField ? formRef.current?.elements.namedItem(invalidField) : null;
+    if (control instanceof HTMLElement) control.focus();
+    else errorRef.current?.focus();
+  }, [error, invalidField]);
+  const dismiss = () => {
+    if (busyRef.current) return;
+    if (confirmDiscard) resumeEditing();
+    else if (dirty) {
+      editFocus.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+      setConfirmDiscard(true);
+    } else onClose();
+  };
   return (
-    <Dialog
-      title={spec.title}
-      onClose={() => {
-        if (!busy) onClose();
-      }}
-    >
+    <Dialog title={spec.title} onClose={dismiss}>
       {spec.intro && <p className="intro">{spec.intro}</p>}
-      <form
+      <form ref={formRef} aria-busy={busy}
+        onChange={(event) => {
+          const field = event.target instanceof HTMLElement && event.target.getAttribute("name");
+          if (!field) return;
+          setDirty(true);
+          if (field === invalidField) {
+            setInvalidField("");
+            setError("");
+          }
+        }}
         onSubmit={async (e) => {
           e.preventDefault();
+          if (busyRef.current || confirmDiscard) return;
           const data = new FormData(e.currentTarget);
           const values: Record<string, string> = {};
           for (const f of spec.fields) {
-            if (f.type === "multiple")
-              values[f.key] = JSON.stringify(data.getAll(f.key));
-            else if (f.type === "checkbox")
+            if (f.type === "multiple") {
+              const options = data.getAll(f.key);
+              if (f.required !== false && !options.length) {
+                setInvalidField("");
+                setError(`Select at least one option in ${f.label}.`);
+                return;
+              }
+              values[f.key] = JSON.stringify(options);
+            } else if (f.type === "checkbox")
               values[f.key] = data.has(f.key) ? "true" : "false";
             else values[f.key] = String(data.get(f.key) || "");
           }
           const f = data.get("file");
+          busyRef.current = true;
           setBusy(true);
+          setInvalidField("");
           setError("");
           try {
             await spec.onSubmit(values, f instanceof File ? f : null);
             onClose();
           } catch (err) {
+            const field = err instanceof ApiError && err.field
+              ? spec.fields.find((field) => field.type !== "multiple" && (field.validationLabel || field.label) === err.field)
+              : undefined;
+            setInvalidField(field?.key || "");
             setError((err as Error).message);
           } finally {
+            busyRef.current = false;
             setBusy(false);
           }
         }}
       >
-        {spec.fields.map((f) => (
+        {spec.fields.map((f) => f.type === "multiple" ? (
+          <OptionChecklist key={f.key} field={f} />
+        ) : (
           <label
             key={f.key}
             className={f.type === "checkbox" ? "check-label" : ""}
@@ -559,6 +639,8 @@ function Editor({ spec, onClose }: { spec: FormSpec; onClose: () => void }) {
                 <input
                   name={f.key}
                   aria-label={f.label}
+                  aria-invalid={invalidField === f.key || undefined}
+                  aria-describedby={invalidField === f.key ? errorId : undefined}
                   type="checkbox"
                   defaultChecked={f.value === "true"}
                 />
@@ -574,6 +656,8 @@ function Editor({ spec, onClose }: { spec: FormSpec; onClose: () => void }) {
                   <textarea
                     name={f.key}
                     aria-label={f.label}
+                    aria-invalid={invalidField === f.key || undefined}
+                    aria-describedby={invalidField === f.key ? errorId : undefined}
                     defaultValue={f.value}
                     required={f.required !== false}
                     rows={4}
@@ -582,19 +666,12 @@ function Editor({ spec, onClose }: { spec: FormSpec; onClose: () => void }) {
                   <select
                     name={f.key}
                     aria-label={f.label}
-                    defaultValue={
-                      f.type === "multiple"
-                        ? JSON.parse(f.value || "[]")
-                        : f.value || ""
-                    }
-                    multiple={f.type === "multiple"}
+                    aria-invalid={invalidField === f.key || undefined}
+                    aria-describedby={invalidField === f.key ? errorId : undefined}
+                    defaultValue={f.value || ""}
                     required={f.required !== false}
                   >
-                    {f.type !== "multiple" && (
-                      <option value="" disabled>
-                        Choose an option
-                      </option>
-                    )}
+                    <option value="" disabled>Choose an option</option>
                     {f.options.map((o) => (
                       <option key={o.value} value={o.value}>
                         {o.label}
@@ -605,6 +682,8 @@ function Editor({ spec, onClose }: { spec: FormSpec; onClose: () => void }) {
                   <PasswordInput
                     name={f.key}
                     aria-label={f.label}
+                    aria-invalid={invalidField === f.key || undefined}
+                    aria-describedby={invalidField === f.key ? errorId : undefined}
                     defaultValue={f.value}
                     required={f.required !== false}
                     maxLength={128}
@@ -619,6 +698,8 @@ function Editor({ spec, onClose }: { spec: FormSpec; onClose: () => void }) {
                   <input
                     name={f.key}
                     aria-label={f.label}
+                    aria-invalid={invalidField === f.key || undefined}
+                    aria-describedby={invalidField === f.key ? errorId : undefined}
                     type={f.type === "decimal" ? "text" : f.type || "text"}
                     inputMode={f.type === "decimal" ? "decimal" : undefined}
                     defaultValue={f.value}
@@ -635,23 +716,33 @@ function Editor({ spec, onClose }: { spec: FormSpec; onClose: () => void }) {
               </>
             )}
             {f.hint && <small>{f.hint}</small>}
+            {invalidField === f.key && <small id={errorId} className="field-error">{error}</small>}
           </label>
         ))}
-        {error && (
-          <p role="alert" className="error">
+        {error && !invalidField && (
+          <p ref={errorRef} tabIndex={-1} role="alert" className="error">
             {error}
           </p>
+        )}
+        {confirmDiscard && (
+          <div className="info-note">
+            <p>Discard unsaved changes? Your entries will be lost.</p>
+            <div className="actions">
+              <button ref={keepEditing} type="button" className="secondary" onClick={resumeEditing}>Keep editing</button>
+              <button type="button" className="text-button danger" onClick={onClose}>Discard changes</button>
+            </div>
+          </div>
         )}
         <div className="dialog-actions">
           <button
             type="button"
             className="secondary"
-            onClick={onClose}
+            onClick={dismiss}
             disabled={busy}
           >
             Cancel
           </button>
-          <button className="primary" disabled={busy}>
+          <button className="primary" disabled={busy || confirmDiscard}>
             {busy ? "Saving…" : spec.submit}
           </button>
         </div>
@@ -659,18 +750,30 @@ function Editor({ spec, onClose }: { spec: FormSpec; onClose: () => void }) {
     </Dialog>
   );
 }
+function readWorkspacePage() {
+  try { return decodeURIComponent(location.hash.slice(1)) || "Overview"; }
+  catch { return "Overview"; }
+}
+const compactWorkspace = "(max-width: 760px), (max-width: 920px) and (pointer: coarse)";
 function App() {
   const [user, setUser] = useState<User | null>(null);
   const [setup, setSetup] = useState(false);
+  const [authCheckFailed, setAuthCheckFailed] = useState(false);
+  const authCodeDisclosure = useRef<HTMLDetailsElement>(null);
+  const authCodeField = useRef<HTMLInputElement>(null);
   const [setupCurrency, setSetupCurrency] = useState("");
   const [setupDecimals, setSetupDecimals] = useState("2");
   const [boot, setBoot] = useState(true);
   const [w, setW] = useState<Workspace | null>(null);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
-  const [page, setPage] = useState(
-    decodeURIComponent(location.hash.slice(1)) || "Overview",
-  );
+  const [refreshWarning, setRefreshWarning] = useState("");
+  const [page, setPage] = useState(readWorkspacePage);
+  const visible = Object.keys(access).filter((p) => user && access[p].includes(user.role));
+  const current = visible.includes(page) ? page : "Overview";
+  const headingRef = useRef<HTMLHeadingElement>(null);
+  const routeTarget = useRef("");
+  const [showAllAttention, setShowAllAttention] = useState(false);
   const [form, setForm] = useState<FormSpec | null>(null);
   const [detail, setDetail] = useState<string | null>(null);
   const [menu, setMenu] = useState(false);
@@ -696,7 +799,9 @@ function App() {
       [title]: !prev[title],
     }));
   };
-  const globalSearchRef = useRef<HTMLInputElement>(null);
+  const mobileSearchRef = useRef<HTMLInputElement>(null);
+  const inventorySearchRef = useRef<HTMLInputElement>(null);
+  const [focusInventorySearch, setFocusInventorySearch] = useState(false);
   const stockSearchButton = useRef<HTMLButtonElement>(null);
   const [focusSearchTrigger, setFocusSearchTrigger] = useState(false);
   const [theme, setTheme] = useState(
@@ -719,6 +824,13 @@ function App() {
       return null;
     }
   });
+  const authorityRef = useRef(showAuthority);
+  const storeShowAuthority = (authority: Row | null) => {
+    authorityRef.current = authority;
+    if (authority) localStorage.setItem("gem-show-authority", JSON.stringify(authority));
+    else localStorage.removeItem("gem-show-authority");
+    setShowAuthority(authority);
+  };
   const [queue, setQueue] = useState<Row[]>(() => {
     try {
       return JSON.parse(localStorage.getItem("gem-offline-events") || "[]");
@@ -727,6 +839,21 @@ function App() {
     }
   });
   const [online, setOnline] = useState(navigator.onLine);
+  const [showReplaying, setShowReplaying] = useState(false);
+  const queueRef = useRef(queue);
+  const storeQueue = (events: Row[]) => {
+    queueRef.current = events;
+    localStorage.setItem("gem-offline-events", JSON.stringify(events));
+    setQueue(events);
+  };
+  useEffect(() => {
+    if (!showAuthority) return;
+    const delay = Math.max(0, Date.parse(str(showAuthority, "expires")) - Date.now());
+    const timer = setTimeout(() => {
+      if (authorityRef.current === showAuthority) storeShowAuthority(null);
+    }, delay);
+    return () => clearTimeout(timer);
+  }, [showAuthority]);
   const buyerToken = location.pathname.startsWith("/buyer/")
     ? location.pathname.split("/")[2]
     : null;
@@ -738,8 +865,7 @@ function App() {
     localStorage.setItem("gem-theme", theme);
   }, [theme]);
   useEffect(() => {
-    const update = () =>
-      setPage(decodeURIComponent(location.hash.slice(1)) || "Overview");
+    const update = () => setPage(readWorkspacePage());
     const on = () => {
       setOnline(true);
       request<{ user: User | null }>("/api/auth")
@@ -747,34 +873,48 @@ function App() {
           if (a.user) {
             setCsrf(a.user.csrf);
             setUser(a.user);
+            return refresh(a.user);
           }
+          setUser(null);
+          setW(null);
+          setCsrf("");
+          storeShowAuthority(null);
         })
         .catch(() => {});
     };
     const off = () => setOnline(false);
-    const onKey = (e: KeyboardEvent) => {
-      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
-        e.preventDefault();
-        globalSearchRef.current?.focus();
-      }
-    };
     window.addEventListener("hashchange", update);
     window.addEventListener("online", on);
     window.addEventListener("offline", off);
-    window.addEventListener("keydown", onKey);
     return () => {
       window.removeEventListener("hashchange", update);
       window.removeEventListener("online", on);
       window.removeEventListener("offline", off);
-      window.removeEventListener("keydown", onKey);
     };
   }, []);
-  const refresh = async () => {
+  const refresh = async (viewer = user) => {
     setRefreshing(true);
     try {
       const data = await request<Workspace>("/api/workspace");
+      const authority = authorityRef.current;
+      if (authority) {
+        const show = list(data, "shows").find((record) => record.id === authority.id);
+        const cachedUser = authority.user as Row | undefined;
+        if (show?.status !== "Assigned" || (viewer && cachedUser?.id !== viewer.id)) {
+          storeShowAuthority(null);
+        } else {
+          const stock = list(data, "stones");
+          // Keep the original signed snapshot's version; newer versions must be downloaded.
+          const eligible = rows(authority.stones).filter((stone) =>
+            stock.some((record) => record.id === stone.id &&
+              record.showId === authority.id && record.state === "In stock" && record.version === stone.version));
+          if (eligible.length !== rows(authority.stones).length)
+            storeShowAuthority({ ...authority, stones: eligible });
+        }
+      }
       setW(data);
       setError("");
+      setRefreshWarning("");
     } catch (e) {
       setError((e as Error).message);
       throw e;
@@ -792,7 +932,7 @@ function App() {
         const saved = JSON.parse(
           localStorage.getItem("gem-show-authority") || "null",
         );
-        if (saved?.user && saved?.settings) {
+        if (saved?.user && saved?.settings && Date.parse(saved.expires) > Date.now()) {
           setUser({ ...saved.user, csrf: "" });
           setW({
             settings: saved.settings,
@@ -824,10 +964,13 @@ function App() {
         setUser(a.user);
         if (a.user) {
           setCsrf(a.user.csrf);
-          await refresh();
+          await refresh(a.user);
         }
       })
-      .catch((e) => setError(e.message))
+      .catch((e) => {
+        setError(e.message);
+        setAuthCheckFailed(true);
+      })
       .finally(() => setBoot(false));
   }, [buyerToken]);
   useEffect(() => {
@@ -838,22 +981,44 @@ function App() {
     return () => clearInterval(timer);
   }, [user]);
   useEffect(() => {
-    document.title = `Gem Management | ${page}`;
+    if (!buyerToken) document.title = `Gem Management | ${current}`;
     setQuery("");
+    setInventoryPage(1);
     setStatus("All stock");
     setSelected([]);
     setMenu(false);
+    if (current !== "Inventory") {
+      setMobileSearchOpen(false);
+      setFocusInventorySearch(false);
+    }
     window.scrollTo(0, 0);
-  }, [page]);
+  }, [current, buyerToken]);
   useEffect(() => {
-    if (page !== "Overview" || !focusAttention) return;
+    if (!user || !w) return;
+    const frame = requestAnimationFrame(() => {
+      const target = routeTarget.current;
+      routeTarget.current = "";
+      if (focusInventorySearch || focusAttention || mobileSearchOpen || document.querySelector("dialog[open]")) return;
+      if (target) {
+        const record = document.getElementById(target);
+        record?.focus({ preventScroll: true });
+        record?.scrollIntoView({ block: "start" });
+      } else if (document.activeElement !== document.body || current !== "Overview") {
+        headingRef.current?.focus({ preventScroll: true });
+      }
+    });
+    return () => cancelAnimationFrame(frame);
+  // Only move focus when the rendered destination changes, not during record refreshes.
+  }, [current]);
+  useEffect(() => {
+    if (current !== "Overview" || !focusAttention) return;
     const attention = document.getElementById("workspace-attention");
     attention?.focus({ preventScroll: true });
     attention?.scrollIntoView();
     setFocusAttention(false);
-  }, [page, focusAttention]);
+  }, [current, focusAttention]);
   useEffect(() => {
-    if (mobileSearchOpen) globalSearchRef.current?.focus();
+    if (mobileSearchOpen) mobileSearchRef.current?.focus();
     else if (focusSearchTrigger) {
       stockSearchButton.current?.focus();
       setFocusSearchTrigger(false);
@@ -865,17 +1030,52 @@ function App() {
     return () => clearTimeout(timer);
   }, [notice]);
   const go = (p: string) => {
+    if (!user || !access[p]?.includes(user.role)) return;
     setMobileSearchOpen(false);
     location.hash = encodeURIComponent(p);
     setPage(p);
     setMenu(false);
   };
+  const openInventorySearch = () => {
+    go("Inventory");
+    if (matchMedia(compactWorkspace).matches) setMobileSearchOpen(true);
+    else setFocusInventorySearch(true);
+  };
+  useEffect(() => {
+    if (!focusInventorySearch || current !== "Inventory") return;
+    inventorySearchRef.current?.focus();
+    setFocusInventorySearch(false);
+  }, [current, focusInventorySearch]);
+  useEffect(() => {
+    if (!user || !access.Inventory.includes(user.role)) return;
+    const onKey = (event: KeyboardEvent) => {
+      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "k" &&
+        !document.querySelector("dialog[open]")) {
+        event.preventDefault();
+        openInventorySearch();
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  });
+  const setInventoryQuery = (value: string) => {
+    setQuery(value);
+    setInventoryPage(1);
+  };
   const can = (...roles: string[]) =>
     !!user && (user.role === "Owner" || roles.includes(user.role));
+  const refreshAfterSave = async (message = "Saved to the workspace.") => {
+    try {
+      await refresh();
+      setNotice(message);
+    } catch {
+      setError("");
+      setRefreshWarning(`${message} Could not refresh records.`);
+    }
+  };
   const execute = async (action: string, body: unknown) => {
     const result = await request(`/api/commands/${action}`, body);
-    await refresh();
-    setNotice("Saved to the workspace.");
+    await refreshAfterSave();
     return result;
   };
   const run = async (
@@ -885,8 +1085,7 @@ function App() {
     setError("");
     try {
       await fn();
-      await refresh();
-      setNotice(message);
+      await refreshAfterSave(message);
     } catch (e) {
       setError((e as Error).message);
     }
@@ -908,6 +1107,8 @@ function App() {
       value: str(s, "id"),
       label: `${s.id} · ${s.variety} · ${s.carats} ct`,
     }));
+  const stockMoney = (value: unknown, unpriced = false) =>
+    baseMoney(value, str(w?.settings || {}, "currency"), w?.settings.minorUnits, unpriced);
   const moneyValue = (v: unknown, currency?: string) =>
     `${String(v ?? "0")} ${currency || w?.settings.currency || ""}`;
   const date = (v: unknown) =>
@@ -938,14 +1139,14 @@ function App() {
         "Create a permanent record. Evidence and ownership must be reviewed before release to stock.",
       submit: "Receive as draft",
       fields: [
-        { key: "variety", label: "Gemstone variety" },
+        { key: "variety", label: "Gemstone variety", validationLabel: "Variety" },
         { key: "shape", label: "Shape", value: "Oval" },
-        { key: "carats", label: "Weight (ct)", type: "decimal" },
-        { key: "count", label: "Stone count", value: "1", type: "number" },
-        { key: "location", label: "Internal location" },
+        { key: "carats", label: "Weight (ct)", validationLabel: "Carat weight", type: "decimal" },
+        { key: "count", label: "Stone count", validationLabel: "Count", value: "1", type: "number" },
+        { key: "location", label: "Internal location", validationLabel: "Location" },
         {
           key: "custodian",
-          label: "Internal custodian",
+          label: "Internal custodian", validationLabel: "Custodian",
           value: "Internal intake",
         },
         { key: "color", label: "Color description", required: false },
@@ -954,13 +1155,13 @@ function App() {
           ? ([
               {
                 key: "cost",
-                label: "Acquisition cost",
+                label: "Acquisition cost", validationLabel: "Cost",
                 value: "0",
                 type: "decimal",
               },
               {
                 key: "price",
-                label: "Asking price",
+                label: "Asking price", validationLabel: "Price",
                 value: "0",
                 type: "decimal",
               },
@@ -1007,7 +1208,7 @@ function App() {
       title: "Add customer",
       submit: "Save customer",
       fields: [
-        { key: "name", label: "Customer or business name" },
+        { key: "name", label: "Customer or business name", validationLabel: "Customer name" },
         { key: "email", label: "Email", type: "email", required: false },
         { key: "phone", label: "Phone", type: "tel", required: false },
         { key: "notes", label: "Notes", type: "textarea", required: false },
@@ -1044,19 +1245,19 @@ function App() {
         },
         {
           key: "price",
-          label: "Sale price per selected stone",
+          label: "Sale price per selected stone", validationLabel: "Sale price",
           type: "decimal",
           value: one ? str(one, "price") : undefined,
           hint: "For different prices, issue the stones separately. Discounts above your limit require the owner.",
         },
         {
           key: "currency",
-          label: "Invoice currency",
+          label: "Invoice currency", validationLabel: "Currency",
           value: str(w!.settings, "currency"),
         },
         {
           key: "exchangeRate",
-          label: "Base-currency units per one invoice-currency unit",
+          label: "Base-currency units per one invoice-currency unit", validationLabel: "Exchange rate",
           type: "decimal",
           value: "1",
         },
@@ -1195,9 +1396,7 @@ function App() {
                 mobile: preview ? "omit" as const : undefined,
                 render: (r: Row) => (
                   <span className="numeric font-medium">
-                    {r.price && str(r, "price") !== "0.00"
-                      ? `$${str(r, "price")}`
-                      : "Unpriced"}
+                    {stockMoney(r.price, true)}
                   </span>
                 ),
               },
@@ -1214,36 +1413,7 @@ function App() {
             </div>
           ),
         },
-        { label: "Evidence", render: (r) => <Badge value={r.evidence} /> },
-        {
-          label: "Action",
-          mobile: "omit",
-          render: (r) => (
-            <div className="action-cell">
-              <button
-                type="button"
-                className="table-action-btn"
-                onClick={() => setDetail(str(r, "id"))}
-                title={`Inspect stone ${r.id}`}
-              >
-                <span>View</span>
-                <svg
-                  width="12"
-                  height="12"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2.2"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  aria-hidden="true"
-                >
-                  <path d="m9 18 6-6-6-6" />
-                </svg>
-              </button>
-            </div>
-          ),
-        },
+        { label: "Evidence", render: (r) => <Badge value={r.evidence} evidence /> },
       ]}
     />
   );
@@ -1281,7 +1451,7 @@ function App() {
               <div className="stone-card-header">
                 <div className="stone-card-badge-wrap">
                   <Badge value={r.state} />
-                  <Badge value={r.evidence} />
+                  <Badge value={r.evidence} evidence />
                 </div>
                 {selectable && (
                   <input
@@ -1320,9 +1490,7 @@ function App() {
                     <div>
                       <span className="metric-label">List Price</span>
                       <strong className="metric-val">
-                        {r.price && str(r, "price") !== "0.00"
-                          ? `$${str(r, "price")}`
-                          : "Unpriced"}
+                        {stockMoney(r.price, true)}
                       </strong>
                     </div>
                   )}
@@ -1374,25 +1542,27 @@ function App() {
     );
   if (!user)
     return (
-      <div className="auth-shell">
-        <section className="auth-story">
-          <GemLogo />
-          <h1>Gem Management</h1>
-          <p>Stock, custody, evidence, and settlement.</p>
-          <div className="auth-note">
-            Your records stay in this workspace.
-            <br />
-            Start with an empty stock book.
-          </div>
-        </section>
-        <section className="auth-form">
-          <h2>{setup ? "Create your workspace" : "Welcome back"}</h2>
-          <p>
-            {setup
-              ? "Set up the owner account. No shared passwords or preview roles."
-              : "Sign in with your assigned account."}
-          </p>
+      <main className={`auth-shell${setup ? " auth-setup" : ""}`}>
+        <section className="auth-form" aria-labelledby="auth-title">
+          <header className="auth-heading">
+            <img
+              className="auth-icon"
+              src="/icons/gem-180.png"
+              alt=""
+              width="64"
+              height="64"
+            />
+            <p className="auth-brand">Gem Management</p>
+            <h1 id="auth-title">{setup ? "Create your workspace" : "Sign in"}</h1>
+            <p>
+              {setup
+                ? "Set up your owner account and choose your workspace settings."
+                : "Use the email and password assigned to you."}
+            </p>
+          </header>
           <form
+            className="auth-fields"
+            aria-busy={refreshing}
             onSubmit={async (e) => {
               e.preventDefault();
               const data = Object.fromEntries(new FormData(e.currentTarget));
@@ -1406,53 +1576,68 @@ function App() {
                 setCsrf(r.user.csrf);
                 setUser(r.user);
                 setSetup(false);
-                await refresh();
+                await refresh(r.user);
               } catch (err) {
-                setError((err as Error).message);
+                const message = (err as Error).message;
+                setError(message);
+                if (
+                  /authenticator code/i.test(message) && authCodeDisclosure.current
+                ) {
+                  authCodeDisclosure.current.open = true;
+                  authCodeField.current?.focus();
+                }
               } finally {
                 setRefreshing(false);
               }
             }}
           >
-            {setup && (
-              <>
-                <label>
-                  Your name
-                  <input name="name" required autoComplete="name" />
-                </label>
-                <label>
-                  Business name
-                  <input
-                    name="businessName"
-                    required
-                    autoComplete="organization"
-                  />
-                </label>
-              </>
-            )}
-            <label>
-              Email
-              <input
-                name="email"
-                type="email"
-                required
-                autoComplete="username"
-              />
-            </label>
-            <label>
-              Password
-              <PasswordInput
-                name="password"
-                aria-label="Password"
-                required
-                minLength={setup ? 12 : undefined}
-                maxLength={128}
-                autoComplete={setup ? "new-password" : "current-password"}
-              />
-            </label>
+            <fieldset className="auth-group">
+              {setup && <legend>Owner account</legend>}
+              {setup && (
+                <>
+                  <label>
+                    Your name
+                    <input name="name" required autoComplete="name" />
+                  </label>
+                  <label>
+                    Business name
+                    <input
+                      name="businessName"
+                      required
+                      autoComplete="organization"
+                    />
+                  </label>
+                </>
+              )}
+              <label>
+                Email
+                <input
+                  name="email"
+                  type="email"
+                  required
+                  autoComplete="username"
+                  autoCapitalize="none"
+                  spellCheck={false}
+                />
+              </label>
+              <div className="auth-password">
+                <label htmlFor="auth-password">Password</label>
+                <PasswordInput
+                  name="password"
+                  id="auth-password"
+                  required
+                  minLength={setup ? 12 : undefined}
+                  maxLength={128}
+                  autoComplete={setup ? "new-password" : "current-password"}
+                  aria-describedby={setup ? "auth-password-hint" : undefined}
+                />
+                {setup && <small id="auth-password-hint">Use at least 12 characters.</small>}
+              </div>
+            </fieldset>
             {setup ? (
-              <>
-                <div className="form-grid">
+              <fieldset className="auth-group">
+                <legend>Workspace settings</legend>
+                <div className="auth-currency">
                   <label>
                     Base currency
                     <select
@@ -1508,51 +1693,52 @@ function App() {
                     ))}
                   </select>
                 </label>
-                <label className="check-label">
+                <label className="check-label auth-training">
                   <input type="checkbox" name="sandbox" />
                   Use this workspace for training and demonstrations
                 </label>
-                <small>
-                  Currency is fixed after setup to preserve ledger consistency.
-                </small>
-              </>
+                <small>Your base currency can’t be changed after setup.</small>
+              </fieldset>
             ) : (
-              <label>
-                Authenticator code (if enabled)
+              <details className="auth-code" ref={authCodeDisclosure}>
+                <summary>Use an authenticator code</summary>
+                <label htmlFor="auth-code">Authenticator code</label>
                 <input
+                  id="auth-code"
+                  ref={authCodeField}
                   name="code"
                   inputMode="numeric"
                   autoComplete="one-time-code"
                   maxLength={6}
+                  aria-describedby="auth-code-hint"
                 />
-              </label>
+                <small id="auth-code-hint">
+                  Enter the six-digit code from your authenticator app.
+                </small>
+              </details>
             )}
             {error && (
               <p className="error" role="alert">
                 {error}
               </p>
             )}
-            <button className="primary wide" disabled={refreshing}>
+            <button className="primary auth-submit" disabled={refreshing}>
               {refreshing ? "Opening…" : setup ? "Create workspace" : "Sign in"}
             </button>
           </form>
-          {!setup && (
-            <button
-              className="text-button"
-              onClick={() =>
-                run(async () => {
-                  const a = await request<{ setupRequired: boolean }>(
-                    "/api/auth",
-                  );
-                  setSetup(a.setupRequired);
-                }, "Connection checked.")
-              }
-            >
-              Check connection
+          {authCheckFailed && (
+            <button type="button" className="text-button auth-retry" onClick={() => window.location.reload()}>
+              Retry connection
             </button>
           )}
+          {!setup && (
+            <details className="auth-install">
+              <summary>Add to iPhone Home Screen</summary>
+              <p>In Safari, tap Share, then Add to Home Screen. Turn on Open as Web App if shown, then tap Add.</p>
+            </details>
+          )}
         </section>
-      </div>
+      </main>
     );
   if (!w)
     return (
@@ -1564,13 +1750,9 @@ function App() {
         </button>
       </div>
     );
-  const visible = Object.keys(access).filter((p) =>
-    access[p].includes(user.role),
-  );
-  const current = visible.includes(page) ? page : "Overview";
   const mobileTabs = [
     { page: "Overview", label: "Overview" },
-    ...(visible.includes("Inventory") ? [{ page: "Inventory", label: "Stock" }] : []),
+    ...(visible.includes("Inventory") ? [{ page: "Inventory", label: "Inventory" }] : []),
     ...(visible.includes("Evidence")
       ? [{ page: "Evidence", label: "Evidence" }]
       : visible.includes("Processing") ? [{ page: "Processing", label: "Processing" }] : []),
@@ -1578,17 +1760,29 @@ function App() {
       ? [{ page: "Payments", label: "Payments" }] : []),
     ...(visible.includes("Sales") ? [{ page: "Sales", label: "Sales" }] : []),
   ];
-  const activeMobilePage = ["Quotes", "Memos"].includes(current) ? "Sales" : current;
+  const activeMobilePage = current;
   const moreIsCurrent = !mobileTabs.some((tab) => tab.page === activeMobilePage);
   const pendingEvidence = stones.some((stone) => stone.evidence !== "Approved");
-  const activeStockFilters = [
-    status !== "All stock",
-    varietyFilter !== "all",
-    locationFilter !== "all",
-    evidenceFilter !== "all",
-    sortBy !== "default",
-  ].filter(Boolean).length;
+  const stockFilters = [
+    { name: "Custody status", value: status === "All stock" ? "" : status, clear: () => setStatus("All stock") },
+    { name: "Variety", value: varietyFilter === "all" ? "" : varietyFilter, clear: () => setVarietyFilter("all") },
+    { name: "Location", value: locationFilter === "all" ? "" : locationFilter, clear: () => setLocationFilter("all") },
+    { name: "Evidence", value: evidenceFilter === "all" ? "" :
+        evidenceFilter === "Approved" ? "Disclosure approved" : evidenceFilter, clear: () => setEvidenceFilter("all") },
+  ].filter((filter) => filter.value);
+  const activeStockFilters = stockFilters.length + Number(sortBy !== "default");
+  const clearStockFilters = () => {
+    stockFilters.forEach((filter) => filter.clear());
+    setSortBy("default");
+    setInventoryQuery("");
+  };
+
   const quotes = list(w, "quotes");
+  const navCounts: Record<string, number> = {
+    Evidence: stones.filter((stone) => stone.evidence !== "Approved").length,
+    Quotes: quotes.filter((quote) => quote.status === "Awaiting owner").length,
+    "Holds & selections": stones.filter((stone) => stone.state === "Held").length,
+  };
   const needsAttention = (stone: Row) =>
     ["Draft", "Returned", "Blocked"].includes(str(stone, "state")) ||
     stone.evidence !== "Approved";
@@ -1606,7 +1800,7 @@ function App() {
         (locationFilter === "all" || str(r, "location") === locationFilter) &&
         (evidenceFilter === "all" || str(r, "evidence") === evidenceFilter) &&
         ["id", "variety", "location", "custodian", "color", "shape"].some((k) =>
-          str(r, k).toLowerCase().includes(query.toLowerCase()),
+          str(r, k).toLowerCase().includes(query.trim().toLowerCase()),
         ),
     )
     .sort((a, b) => {
@@ -1622,6 +1816,15 @@ function App() {
     });
   const PAGE_SIZE = 8;
   const totalPages = Math.max(1, Math.ceil(inventoryView.length / PAGE_SIZE));
+  const assignmentQueue = showAuthority ? queue.filter((event) =>
+    (event.payload as Row)?.showId === showAuthority.id) : [];
+  const unresolvedQueueCount = queue.length - assignmentQueue.length;
+  const eligibleShowStock = (authority: Row, events: Row[]) =>
+    rows(authority.stones).filter((stone) =>
+      stone.state === "In stock" && stone.internal && stone.ownershipConfirmed &&
+      stone.evidence === "Approved" && stone.showId === authority.id &&
+      !events.some((event) => rows((event.payload as Row)?.lines).some((line) => line.stoneId === stone.id)));
+  const showStock = showAuthority ? eligibleShowStock(showAuthority, assignmentQueue) : [];
   const currentPage = Math.min(inventoryPage, totalPages);
   const paginatedInventory = inventoryView.slice(
     (currentPage - 1) * PAGE_SIZE,
@@ -1639,7 +1842,11 @@ function App() {
   );
   return (
     <>
-      <a className="skip" href="#main">
+      <a className="skip" href="#main" onClick={(event) => {
+        event.preventDefault();
+        document.getElementById("main")?.focus();
+        headingRef.current?.scrollIntoView({ block: "start" });
+      }}>
         Skip to content
       </a>
       <div className="workspace">
@@ -1647,7 +1854,7 @@ function App() {
           <div className="brand">
             <GemLogo />
             <div>
-              <strong>GemVault</strong>
+              <strong>Gem Management</strong>
               <small>
                 {w.settings.sandbox ? "Training workspace" : "Bitmo Precision Stock"}
               </small>
@@ -1698,43 +1905,18 @@ function App() {
                     inert={isCollapsed}
                   >
                     {groupPages.map((p) => (
-                      <button
-                        key={p}
-                        aria-label={p}
-                        aria-current={current === p ? "page" : undefined}
-                        className={current === p ? "active" : ""}
-                        onClick={() => go(p)}
-                      >
-                        <Mark name={p} />
-                        <span>{p}</span>
-                        {p === "Evidence" &&
-                          stones.some((s) => s.evidence !== "Approved") && (
-                            <span className="nav-count" aria-hidden="true">
-                              {
-                                stones.filter((s) => s.evidence !== "Approved")
-                                  .length
-                              }
-                            </span>
-                          )}
-                        {p === "Quotes" &&
-                          quotes.filter(
-                            (q) => str(q, "status") === "Awaiting owner",
-                          ).length > 0 && (
-                            <span className="nav-count" aria-hidden="true">
-                              {
-                                quotes.filter(
-                                  (q) => str(q, "status") === "Awaiting owner",
-                                ).length
-                              }
-                            </span>
-                          )}
-                        {p === "Holds & selections" &&
-                          stones.some((s) => s.state === "Held") && (
-                            <span className="nav-count" aria-hidden="true">
-                              {stones.filter((s) => s.state === "Held").length}
-                            </span>
-                          )}
-                      </button>
+                      <div className="nav-destination" key={p}>
+                        <button
+                          aria-current={current === p ? "page" : undefined}
+                          className={current === p ? "active" : ""}
+                          aria-description={navCounts[p] ? `${navCounts[p]} pending records` : undefined}
+                          onClick={() => go(p)}
+                        >
+                          <Mark name={p} />
+                          <span>{p}</span>
+                        </button>
+                        {!!navCounts[p] && <span className="nav-count" aria-hidden="true">{navCounts[p]}</span>}
+                      </div>
                     ))}
                   </div>
                 </div>
@@ -1754,8 +1936,7 @@ function App() {
                   setAssistantError("");
                   setW(null);
                   setCsrf("");
-                  localStorage.removeItem("gem-show-authority");
-                  setShowAuthority(null);
+                  storeShowAuthority(null);
                 }, "Signed out.")
               }
             >
@@ -1769,22 +1950,19 @@ function App() {
               <div className="mobile-search-active-bar">
                 <Mark name="search" />
                 <input
-                  ref={globalSearchRef}
+                  ref={mobileSearchRef}
                   type="search"
                   enterKeyHint="search"
-                  aria-label="Search stock"
+                  aria-label="Search inventory"
                   value={query}
-                  onChange={(e) => {
-                    setQuery(e.target.value);
-                    setInventoryPage(1);
-                  }}
+                  onChange={(e) => setInventoryQuery(e.target.value)}
                   onKeyDown={(e) => {
                     if (e.key === "Escape" || e.key === "Enter") {
                       setFocusSearchTrigger(true);
                       setMobileSearchOpen(false);
                     }
                   }}
-                  placeholder="Search stock"
+                  placeholder="Search inventory"
                   className="mobile-search-input"
                 />
                 {query && (
@@ -1794,7 +1972,7 @@ function App() {
                     aria-label="Clear search"
                     onClick={() => {
                       setQuery("");
-                      globalSearchRef.current?.focus();
+                      mobileSearchRef.current?.focus();
                     }}
                   >
                     ✕
@@ -1818,48 +1996,17 @@ function App() {
                   <span className="mobile-toolbar-title">Gem Management</span>
                 </div>
 
-                <div className="toolbar-start desktop-only">
-                  <div className="global-search-container">
-                    <Mark name="search" />
-                    <input
-                      ref={globalSearchRef}
-                      aria-label="Search records"
-                      value={query}
-                      onChange={(e) => setQuery(e.target.value)}
-                      placeholder="Search stones, custody, certificates, customers..."
-                      className="global-search-input"
-                    />
-                    {query && (
-                      <button
-                        type="button"
-                        className="search-clear-btn"
-                        aria-label="Clear search"
-                        onClick={() => {
-                          setQuery("");
-                          globalSearchRef.current?.focus();
-                        }}
-                      >
-                        ✕
-                      </button>
-                    )}
-                  </div>
+                <div className="toolbar-start">
+                  {visible.includes("Inventory") && (
+                    <button ref={stockSearchButton} type="button" className="icon-utility-btn inventory-search-trigger"
+                      aria-label="Search inventory" title="Search inventory (⌘/Ctrl+K)" onClick={openInventorySearch}>
+                      <Mark name="search" />
+                      <span className="desktop-only">Search inventory</span>
+                    </button>
+                  )}
                 </div>
 
                 <div className="toolbar-end">
-                  {visible.includes("Inventory") && (
-                    <button
-                      ref={stockSearchButton}
-                      type="button"
-                      className="icon-utility-btn mobile-only"
-                      aria-label="Search stock"
-                      onClick={() => {
-                        go("Inventory");
-                        setMobileSearchOpen(true);
-                      }}
-                    >
-                      <Mark name="search" />
-                    </button>
-                  )}
                   <button
                     type="button"
                     className="icon-utility-btn desktop-only"
@@ -1901,7 +2048,9 @@ function App() {
                     className="user-profile-pill"
                     onClick={() => setMenu(true)}
                     title={`${user.name} (${user.role})`}
-                    aria-label={`Open workspaces and settings menu for ${user.name}`}
+                    aria-label={`${user.name.slice(0, 2).toUpperCase()} ${user.name} ${user.role} — account and workspaces`}
+                    aria-haspopup="dialog"
+                    aria-expanded={menu}
                   >
                     <div className="user-avatar">{user.name.slice(0, 2).toUpperCase()}</div>
                     <div className="user-info desktop-only">
@@ -1938,6 +2087,14 @@ function App() {
                 </button>
               </div>
             )}
+            {refreshWarning && (
+              <div className="info-note" role="status">
+                {refreshWarning}{" "}
+                <button className="text-button" disabled={refreshing} onClick={() =>
+                  refresh().catch(() => setError(""))
+                }>Refresh records</button>
+              </div>
+            )}
             {notice && (
               <div className="toast" role="status">
                 {notice}
@@ -1945,7 +2102,7 @@ function App() {
             )}
             <div className="page-heading">
               <div>
-                <h1>{current}</h1>
+                <h1 ref={headingRef} tabIndex={-1}>{current}</h1>
                 <p>{descriptions[current]}</p>
               </div>
               <div className="actions">
@@ -2116,7 +2273,7 @@ function App() {
                     <p>Reviewed, internally held, and authorized for sale.</p>
                     {visible.includes("Inventory") && (
                       <button className="text-button desktop-only" onClick={() => go("Inventory")}>
-                        Open stock book
+                        Open inventory
                       </button>
                     )}
                   </div>
@@ -2126,34 +2283,18 @@ function App() {
                     {stockStatusSummary}
                   </details>
                 </section>
-                <section className="panel recent-stock">
-                  <div className="section-heading">
-                    <h2>Recent stock</h2>
-                    {visible.includes("Inventory") && (
-                      <button className="text-button" onClick={() => go("Inventory")}>
-                        All stock <Mark name="chevron" />
-                      </button>
-                    )}
-                  </div>
-                  {stoneTable(stones.slice(0, 5), false, undefined, true)}
-                </section>
                 <section
                   className="work-list"
                   id="workspace-attention"
                   tabIndex={-1}
                   aria-labelledby="attention-heading"
                 >
-                  <h2 id="attention-heading">Needs attention</h2>
-                  {attentionStones.slice(0, 6)
+                  <h2 id="attention-heading">Needs attention{urgentCount ? ` (${urgentCount})` : ""}</h2>
+                  {(showAllAttention ? attentionStones : attentionStones.slice(0, 3))
                     .map((s) => (
                       <button
                         key={str(s, "id")}
                         onClick={() => {
-                          go(
-                            access.Inventory.includes(user.role)
-                              ? "Inventory"
-                              : "Walkthrough",
-                          );
                           setDetail(str(s, "id"));
                         }}
                       >
@@ -2175,17 +2316,40 @@ function App() {
                       No stock waiting for intake or evidence review.
                     </p>
                   )}
-                  {overdueMemos.map((m) => (
-                      <button key={str(m, "id")} onClick={() => go("Memos")}>
-                        <span>
-                          <strong>{str(m, "id")} overdue</strong>
-                          <small>
-                            {str(m, "customerName")} · {date(m.due)}
-                          </small>
-                        </span>
-                        <Badge value="Overdue" />
+                  {(showAllAttention ? overdueMemos : overdueMemos.slice(0, 2)).map((m) => {
+                    const content = <>
+                      <span>
+                        <strong>{str(m, "id")} overdue</strong>
+                        <small>{str(m, "customerName")} · {date(m.due)}</small>
+                      </span>
+                      <Badge value="Overdue" />
+                    </>;
+                    return visible.includes("Memos") ? (
+                      <button key={str(m, "id")} onClick={() => {
+                        routeTarget.current = `memo-${m.id}`;
+                        go("Memos");
+                      }}>{content}</button>
+                    ) : <div key={str(m, "id")} className="attention-readonly">
+                      {content}<small>Contact Sales or Accounts for follow-up.</small>
+                    </div>;
+                  })}
+                  {(attentionStones.length > 3 || overdueMemos.length > 2) && (
+                    <button className="text-button attention-toggle" aria-expanded={showAllAttention}
+                      onClick={() => setShowAllAttention(!showAllAttention)}>
+                      {showAllAttention ? "Show fewer records" : `View all ${urgentCount} records`}
+                    </button>
+                  )}
+                </section>
+                <section className="panel recent-stock">
+                  <div className="section-heading">
+                    <h2>Recent stock</h2>
+                    {visible.includes("Inventory") && (
+                      <button className="text-button" onClick={() => go("Inventory")}>
+                        Open inventory <Mark name="chevron" />
                       </button>
-                    ))}
+                    )}
+                  </div>
+                  {stoneTable(stones.slice(0, 5), false, undefined, true)}
                 </section>
               </>
             )}
@@ -2295,6 +2459,7 @@ function App() {
                           onClick={() => setViewMode("table")}
                           title="Table view"
                           aria-label="Table view"
+                          aria-pressed={viewMode === "table"}
                         >
                           <Mark name="table" />
                         </button>
@@ -2303,6 +2468,7 @@ function App() {
                           onClick={() => setViewMode("grid")}
                           title="Grid view"
                           aria-label="Grid view"
+                          aria-pressed={viewMode === "grid"}
                         >
                           <Mark name="grid" />
                         </button>
@@ -2311,151 +2477,32 @@ function App() {
                       <div className="card-search-box">
                         <Mark name="search" />
                         <input
+                          ref={inventorySearchRef}
                           aria-label="Search inventory"
                           value={query}
-                          onChange={(e) => setQuery(e.target.value)}
-                          placeholder="Search variety, ID, safe or custodian..."
+                          onChange={(e) => setInventoryQuery(e.target.value)}
+                          placeholder="Variety, ID, location or custodian"
                         />
                       </div>
                     </div>
 
-                    <div className="card-actions-right">
-                      <select
-                        className="select-pill"
-                        value={sortBy}
-                        onChange={(e) => {
-                          setSortBy(e.target.value);
-                          setInventoryPage(1);
-                        }}
-                        aria-label="Sort by"
-                      >
-                        <option value="default">Sort by: Default</option>
-                        <option value="weight-desc">Weight: High to Low</option>
-                        <option value="weight-asc">Weight: Low to High</option>
-                        <option value="price-desc">Price: High to Low</option>
-                        <option value="price-asc">Price: Low to High</option>
-                      </select>
+                    <button type="button" className="secondary filter-toggle-pill" onClick={() => setFilterSheetOpen(true)} aria-haspopup="dialog">
+                      <Mark name="filter" />
+                      Filters {activeStockFilters ? `(${activeStockFilters})` : ""}
+                    </button>
+                  </div>
 
-                      {can("Inventory clerk") && (
-                        <button className="primary" onClick={openReceive}>
-                          <Mark name="plus" />
-                          <span>Receive Stock</span>
+                  {!!stockFilters.length && (
+                    <div className="active-filters" aria-label="Active inventory filters">
+                      {stockFilters.map((filter) => (
+                        <button key={filter.name} className="secondary" type="button"
+                          aria-label={`${filter.value} — remove ${filter.name} filter`}
+                          onClick={() => { filter.clear(); setInventoryPage(1); }}>
+                          {filter.value} <span aria-hidden="true">×</span>
                         </button>
-                      )}
+                      ))}
                     </div>
-                  </div>
-
-                  {/* Refined Domain-Specific Filter Bar (Desktop Only) */}
-                  <div className="inventory-filters-bar desktop-only">
-                    <div className="filter-group">
-                      <label htmlFor="filter-variety" className="filter-label">
-                        Gem Variety & Species
-                      </label>
-                      <select
-                        id="filter-variety"
-                        className="filter-select"
-                        value={varietyFilter}
-                        onChange={(e) => {
-                          setVarietyFilter(e.target.value);
-                          setInventoryPage(1);
-                        }}
-                      >
-                        <option value="all">All Varieties ({stones.length})</option>
-                        {[...new Set(stones.map((s) => str(s, "variety")))].map(
-                          (v: string) => (
-                            <option key={v} value={v}>
-                              {v}
-                            </option>
-                          ),
-                        )}
-                      </select>
-                    </div>
-
-                    <div className="filter-group">
-                      <label htmlFor="filter-status" className="filter-label">
-                        Vault Custody Status
-                      </label>
-                      <select
-                        id="filter-status"
-                        className="filter-select"
-                        value={status}
-                        onChange={(e) => {
-                          setStatus(e.target.value);
-                          setInventoryPage(1);
-                        }}
-                      >
-                        <option>All stock</option>
-                        {STATES.map((v) => (
-                          <option key={v}>{v}</option>
-                        ))}
-                      </select>
-                    </div>
-
-                    <div className="filter-group">
-                      <label htmlFor="filter-location" className="filter-label">
-                        Vault Safe & Location
-                      </label>
-                      <select
-                        id="filter-location"
-                        className="filter-select"
-                        value={locationFilter}
-                        onChange={(e) => {
-                          setLocationFilter(e.target.value);
-                          setInventoryPage(1);
-                        }}
-                      >
-                        <option value="all">All Safe Locations</option>
-                        {[...new Set(stones.map((s) => str(s, "location")))].map(
-                          (loc: string) => (
-                            <option key={loc} value={loc}>
-                              {loc}
-                            </option>
-                          ),
-                        )}
-                      </select>
-                    </div>
-
-                    <div className="filter-group">
-                      <label htmlFor="filter-evidence" className="filter-label">
-                        Laboratory Evidence
-                      </label>
-                      <select
-                        id="filter-evidence"
-                        className="filter-select"
-                        value={evidenceFilter}
-                        onChange={(e) => {
-                          setEvidenceFilter(e.target.value);
-                          setInventoryPage(1);
-                        }}
-                      >
-                        <option value="all">All Evidence States</option>
-                        <option value="Approved">Approved (Verified)</option>
-                        <option value="Review needed">Review needed</option>
-                        <option value="Conflict">Conflict</option>
-                      </select>
-                    </div>
-
-                    {(varietyFilter !== "all" ||
-                      status !== "All stock" ||
-                      locationFilter !== "all" ||
-                      evidenceFilter !== "all" ||
-                      query) && (
-                      <button
-                        type="button"
-                        className="text-button reset-filter-btn"
-                        onClick={() => {
-                          setVarietyFilter("all");
-                          setStatus("All stock");
-                          setLocationFilter("all");
-                          setEvidenceFilter("all");
-                          setQuery("");
-                          setInventoryPage(1);
-                        }}
-                      >
-                        Clear filters
-                      </button>
-                    )}
-                  </div>
+                  )}
 
                   {/* Selected Action Bar */}
                   {selected.length > 0 && (
@@ -2502,13 +2549,18 @@ function App() {
                   )}
 
                   {/* The Paginated Stone Table or Grid (fixes F-01) */}
-                  {viewMode === "grid"
+                  {!inventoryView.length && (stockFilters.length || query.trim()) ? (
+                    <div className="empty">
+                      <p>No stones match this search.</p>
+                      <button type="button" className="text-button" onClick={clearStockFilters}>Clear search and filters</button>
+                    </div>
+                  ) : viewMode === "grid"
                     ? stoneGrid(paginatedInventory, true)
                     : stoneTable(paginatedInventory, true)}
 
                   {/* Fully Functional Reactive Pagination Bar (fixes F-02) */}
                   <div className="pagination-bar">
-                    <div className="pagination-info">
+                    <div className="pagination-info" role="status" aria-atomic="true">
                       Showing{" "}
                       <strong>
                         {inventoryView.length === 0
@@ -2796,7 +2848,7 @@ function App() {
                   </div>
                 )}
                 {list(w, "memos").map((m) => (
-                  <section className="panel memo-section" key={str(m, "id")}>
+                  <section className="panel memo-section" id={`memo-${m.id}`} tabIndex={-1} key={str(m, "id")}>
                     <div className="section-heading">
                       <div>
                         <h2>
@@ -3642,7 +3694,7 @@ function App() {
                             stoneIds: JSON.parse(v.stoneIds),
                             deviceId: deviceId(),
                           });
-                          await refresh();
+                          await refreshAfterSave();
                         },
                       })
                     }
@@ -3676,6 +3728,7 @@ function App() {
                             {can("Sales staff") && (
                               <button
                                 className="secondary compact"
+                                disabled={!online}
                                 onClick={() =>
                                   run(async () => {
                                     const a = await request(
@@ -3689,11 +3742,7 @@ function App() {
                                       role: user.role,
                                     };
                                     a.settings = w.settings;
-                                    localStorage.setItem(
-                                      "gem-show-authority",
-                                      JSON.stringify(a),
-                                    );
-                                    setShowAuthority(a);
+                                    storeShowAuthority(a);
                                   }, "Authority downloaded to this device.")
                                 }
                               >
@@ -3703,6 +3752,7 @@ function App() {
                             {can("Inventory clerk") && (
                               <button
                                 className="text-button"
+                                disabled={!online}
                                 onClick={() =>
                                   setForm({
                                     title: "Release show stock",
@@ -3718,7 +3768,8 @@ function App() {
                                       },
                                     ],
                                     onSubmit: async (v) => {
-                                      if (v.confirm !== "true" || queue.length)
+                                      if (v.confirm !== "true" || queueRef.current.some((event) =>
+                                        (event.payload as Row)?.showId === r.id))
                                         throw new Error(
                                           "Reconcile the device queue before releasing.",
                                         );
@@ -3726,7 +3777,8 @@ function App() {
                                         `/api/shows/${r.id}/release`,
                                         { confirmedReconciled: true },
                                       );
-                                      await refresh();
+                                      if (authorityRef.current?.id === r.id) storeShowAuthority(null);
+                                      await refreshAfterSave("Show stock released.");
                                     },
                                   })
                                 }
@@ -3768,7 +3820,7 @@ function App() {
                                   `/api/shows/${c.showId}/conflicts/${c.id}/reject`,
                                   v,
                                 );
-                                await refresh();
+                                await refreshAfterSave("Queued event rejected.");
                               },
                             })
                           }
@@ -3778,6 +3830,13 @@ function App() {
                       )}
                     </div>
                   ))}
+                {unresolvedQueueCount > 0 && (
+                  <div className="info-note" role="status">
+                    {unresolvedQueueCount} queued {unresolvedQueueCount === 1 ? "sale needs" : "sales need"} review.
+                    This device does not have active authority for {unresolvedQueueCount === 1 ? "that sale" : "those sales"}.
+                    Keep this browser’s data and contact the workspace owner before recording a replacement.
+                  </div>
+                )}
                 {showAuthority && (
                   <section className="panel section-gap">
                     <h2>Downloaded device authority</h2>
@@ -3787,6 +3846,7 @@ function App() {
                     </p>
                     <button
                       className="secondary"
+                      disabled={!showStock.length || !rows(showAuthority.customers).length}
                       onClick={() =>
                         setForm({
                           title: "Queue an offline sale",
@@ -3807,15 +3867,7 @@ function App() {
                             {
                               key: "stoneId",
                               label: "Assigned stone",
-                              options: rows(showAuthority.stones)
-                                .filter(
-                                  (s) =>
-                                    !queue.some((e) =>
-                                      rows((e.payload as Row).lines).some(
-                                        (l) => l.stoneId === s.id,
-                                      ),
-                                    ),
-                                )
+                              options: showStock
                                 .map((s) => ({
                                   value: str(s, "id"),
                                   label: `${s.id} · ${s.variety}`,
@@ -3824,16 +3876,22 @@ function App() {
                             { key: "price", label: "Price", type: "decimal" },
                           ],
                           onSubmit: async (v) => {
-                            if (
-                              Date.parse(str(showAuthority, "expires")) <
-                              Date.now()
-                            )
-                              throw new Error(
-                                "Authority has expired. Reconnect to review the assignment.",
-                              );
-                            const stone = rows(showAuthority.stones).find(
-                              (s) => s.id === v.stoneId,
-                            );
+                            const active = authorityRef.current;
+                            if (!active || active.id !== showAuthority.id || Date.parse(str(active, "expires")) <= Date.now())
+                              throw new Error("Authority is no longer active. Reconnect to review the assignment.");
+                            // When connected, verify with the server before acknowledging a new signed sale.
+                            const valid = navigator.onLine
+                              ? await request(`/api/shows/${active.id}/authority`, { deviceId: deviceId() }).catch((error) => {
+                                  if (error instanceof ApiError && [400, 403, 404, 409].includes(error.status)) {
+                                    storeShowAuthority(null);
+                                    throw new Error("This assignment is no longer available on this device.");
+                                  }
+                                  throw error;
+                                })
+                              : active;
+                            const stone = eligibleShowStock(valid, queueRef.current).find((record) => record.id === v.stoneId);
+                            if (!stone || Date.parse(str(valid, "expires")) <= Date.now())
+                              throw new Error("This stone is no longer eligible. Reopen the sale to choose another.");
                             const payload = {
                               id: crypto.randomUUID(),
                               showId: showAuthority.id,
@@ -3852,7 +3910,7 @@ function App() {
                             const key = await crypto.subtle.importKey(
                               "raw",
                               Uint8Array.from(
-                                str(showAuthority, "key").match(/.{2}/g) || [],
+                                str(valid, "key").match(/.{2}/g) || [],
                                 (x) => parseInt(x, 16),
                               ),
                               { name: "HMAC", hash: "SHA-256" },
@@ -3870,12 +3928,9 @@ function App() {
                                 x.toString(16).padStart(2, "0"),
                               ).join(""),
                             };
-                            const updated = [...queue, event];
-                            setQueue(updated);
-                            localStorage.setItem(
-                              "gem-offline-events",
-                              JSON.stringify(updated),
-                            );
+                            if (authorityRef.current?.id !== active.id)
+                              throw new Error("The assignment changed. No sale was queued.");
+                            storeQueue([...queueRef.current, event]);
                             setNotice("Signed sale queued on this device.");
                           },
                         })
@@ -3883,61 +3938,62 @@ function App() {
                     >
                       Queue offline sale
                     </button>
+                    {!showStock.length && <p className="muted">No eligible assigned stones remain to queue.</p>}
+                    {!rows(showAuthority.customers).length && <p className="muted">Download authority again after a customer is added.</p>}
                     <button
                       className="primary"
-                      disabled={!online || !queue.length}
-                      onClick={() =>
-                        run(async () => {
-                          const response = await request(
-                            `/api/shows/${showAuthority.id}/replay`,
-                            { events: queue },
-                          );
-                          const results = rows(response.results);
-                          const reconciled = results
-                            .filter((r) =>
-                              ["Reconciled", "Cancelled"].includes(
-                                str(r, "status"),
-                              ),
-                            )
-                            .map((r) => r.eventId);
-                          const pending = queue.filter(
-                            (e) => !reconciled.includes((e.payload as Row).id),
-                          );
-                          setQueue(pending);
-                          localStorage.setItem(
-                            "gem-offline-events",
-                            JSON.stringify(pending),
-                          );
-                          const fresh = await request(
-                            `/api/shows/${showAuthority.id}/authority`,
-                            { deviceId: deviceId() },
-                          );
-                          fresh.user = {
-                            id: user.id,
-                            name: user.name,
-                            email: user.email,
-                            role: user.role,
-                          };
-                          fresh.settings = w.settings;
-                          setShowAuthority(fresh);
-                          localStorage.setItem(
-                            "gem-show-authority",
-                            JSON.stringify(fresh),
-                          );
-                          if (pending.length)
-                            throw new Error(
-                              results
-                                .filter((r) => r.status === "Blocked")
-                                .map((r) => r.error)
-                                .join(" "),
+                      disabled={!online || !assignmentQueue.length || showReplaying}
+                      onClick={async () => {
+                        setShowReplaying(true);
+                        try {
+                          await run(async () => {
+                            const response = await request(
+                              `/api/shows/${showAuthority.id}/replay`,
+                              { events: assignmentQueue },
                             );
-                        }, "All device events reconciled.")
-                      }
+                            const results = rows(response.results);
+                            const reconciled = results
+                              .filter((r) =>
+                                ["Reconciled", "Cancelled"].includes(
+                                  str(r, "status"),
+                                ),
+                              )
+                              .map((r) => r.eventId);
+                            const pending = assignmentQueue.filter(
+                              (e) => !reconciled.includes((e.payload as Row).id),
+                            );
+                            storeQueue(queueRef.current.filter(
+                              (e) => !reconciled.includes((e.payload as Row).id),
+                            ));
+                            const fresh = await request(
+                              `/api/shows/${showAuthority.id}/authority`,
+                              { deviceId: deviceId() },
+                            );
+                            fresh.user = {
+                              id: user.id,
+                              name: user.name,
+                              email: user.email,
+                              role: user.role,
+                            };
+                            fresh.settings = w.settings;
+                            if (authorityRef.current?.id === showAuthority.id) storeShowAuthority(fresh);
+                            if (pending.length)
+                              throw new Error(
+                                results
+                                  .filter((r) => r.status === "Blocked")
+                                  .map((r) => r.error)
+                                  .join(" "),
+                              );
+                          }, "All device events reconciled.");
+                        } finally {
+                          setShowReplaying(false);
+                        }
+                      }}
                     >
-                      Reconcile {queue.length} queued sales
+                      {showReplaying ? "Reconciling…" : `Reconcile ${assignmentQueue.length} queued sales`}
                     </button>
                     <p className="muted">
-                      {queue.length} events pending. A blocked event remains on
+                      {assignmentQueue.length} events pending. A blocked event remains on
                       this device for review.
                     </p>
                   </section>
@@ -4014,7 +4070,7 @@ function App() {
                             ],
                             onSubmit: async (v) => {
                               await request("/api/settings", v);
-                              await refresh();
+                              await refreshAfterSave();
                             },
                           })
                         }
@@ -4108,7 +4164,7 @@ function App() {
                               ],
                               onSubmit: async (v) => {
                                 await request("/api/users", v);
-                                await refresh();
+                                await refreshAfterSave();
                               },
                             })
                           }
@@ -4256,47 +4312,6 @@ function App() {
       {menu && (
         <Dialog title="Workspaces & settings" onClose={() => setMenu(false)}>
           <div className="more-menu-content">
-            <div className="more-account-card">
-              <div className="more-account-header">
-                <div className="user-avatar">
-                  {user.name.slice(0, 2).toUpperCase()}
-                </div>
-                <div>
-                  <strong>{user.name}</strong>
-                  <p>
-                    {user.role} · {str(w.settings, "currency")}
-                  </p>
-                </div>
-              </div>
-              <div className="more-account-actions">
-                <button
-                  type="button"
-                  className="secondary wide"
-                  onClick={() => setTheme(theme === "light" ? "dark" : "light")}
-                >
-                  <Mark name={theme === "light" ? "moon" : "sun"} />
-                  <span>Appearance: {theme === "light" ? "Light" : "Dark"}</span>
-                </button>
-                <button
-                  type="button"
-                  className="text-button danger wide"
-                  onClick={() =>
-                    run(async () => {
-                      await request("/api/logout", {});
-                      setUser(null);
-                      setAnswer("");
-                      setAssistantError("");
-                      setW(null);
-                      setCsrf("");
-                      localStorage.removeItem("gem-show-authority");
-                      setShowAuthority(null);
-                    }, "Signed out.")
-                  }
-                >
-                  Sign out
-                </button>
-              </div>
-            </div>
             {NAV_GROUPS.map((group) => {
               const groupPages = group.pages.filter((p) => visible.includes(p));
               if (!groupPages.length) return null;
@@ -4339,6 +4354,46 @@ function App() {
               );
             })}
 
+            <div className="more-account-card">
+              <div className="more-account-header">
+                <div className="user-avatar">
+                  {user.name.slice(0, 2).toUpperCase()}
+                </div>
+                <div>
+                  <strong>{user.name}</strong>
+                  <p>
+                    {user.role} · {str(w.settings, "currency")}
+                  </p>
+                </div>
+              </div>
+              <div className="more-account-actions">
+                <button
+                  type="button"
+                  className="secondary wide"
+                  onClick={() => setTheme(theme === "light" ? "dark" : "light")}
+                >
+                  <Mark name={theme === "light" ? "moon" : "sun"} />
+                  <span>Appearance: {theme === "light" ? "Light" : "Dark"}</span>
+                </button>
+                <button
+                  type="button"
+                  className="text-button danger wide"
+                  onClick={() =>
+                    run(async () => {
+                      await request("/api/logout", {});
+                      setUser(null);
+                      setAnswer("");
+                      setAssistantError("");
+                      setW(null);
+                      setCsrf("");
+                      storeShowAuthority(null);
+                    }, "Signed out.")
+                  }
+                >
+                  Sign out
+                </button>
+              </div>
+            </div>
           </div>
         </Dialog>
       )}
@@ -4349,6 +4404,7 @@ function App() {
           onClose={() => setFilterSheetOpen(false)}
         >
           <div className="filter-sheet-body">
+            <p className="muted">Changes apply immediately. Closing keeps your current filters.</p>
             <div className="filter-sheet-field">
               <label htmlFor="m-status" className="filter-label">Custody status</label>
               <select
@@ -4366,7 +4422,7 @@ function App() {
             </div>
             <div className="filter-sheet-field">
               <label htmlFor="m-variety" className="filter-label">
-                Gem Variety & Species
+                Variety
               </label>
               <select
                 id="m-variety"
@@ -4389,7 +4445,7 @@ function App() {
             </div>
             <div className="filter-sheet-field">
               <label htmlFor="m-location" className="filter-label">
-                Vault Safe & Location
+                Location
               </label>
               <select
                 id="m-location"
@@ -4412,7 +4468,7 @@ function App() {
             </div>
             <div className="filter-sheet-field">
               <label htmlFor="m-evidence" className="filter-label">
-                Laboratory Evidence
+                Evidence
               </label>
               <select
                 id="m-evidence"
@@ -4424,7 +4480,7 @@ function App() {
                 }}
               >
                 <option value="all">All Evidence States</option>
-                <option value="Approved">Approved (Verified)</option>
+                <option value="Approved">Disclosure approved</option>
                 <option value="Review needed">Review needed</option>
                 <option value="Conflict">Conflict</option>
               </select>
@@ -4445,8 +4501,10 @@ function App() {
                 <option value="default">Default order</option>
                 <option value="weight-desc">Weight: High to Low</option>
                 <option value="weight-asc">Weight: Low to High</option>
-                <option value="price-desc">Price: High to Low</option>
-                <option value="price-asc">Price: Low to High</option>
+                {can("Sales staff") && <>
+                  <option value="price-desc">Price: High to Low</option>
+                  <option value="price-asc">Price: Low to High</option>
+                </>}
               </select>
             </div>
             <div className="dialog-actions">
@@ -4454,12 +4512,7 @@ function App() {
                 type="button"
                 className="secondary"
                 onClick={() => {
-                  setStatus("All stock");
-                  setVarietyFilter("all");
-                  setLocationFilter("all");
-                  setEvidenceFilter("all");
-                  setSortBy("default");
-                  setInventoryPage(1);
+                  clearStockFilters();
                   setFilterSheetOpen(false);
                 }}
               >
@@ -4503,7 +4556,9 @@ function App() {
             ].map(([label, key]) => (
               <div key={key}>
                 <dt>{label}</dt>
-                <dd>{str(s, key) || "Not recorded"}</dd>
+                <dd>{key === "price" || key === "cost"
+                  ? stockMoney(s[key], key === "price")
+                  : str(s, key) || "Not recorded"}</dd>
               </div>
             ))}
             <div>
@@ -4630,7 +4685,7 @@ function App() {
                         data.append("stoneId", str(s, "id"));
                         data.append("file", file);
                         await request("/api/files", data);
-                        await refresh();
+                        await refreshAfterSave();
                       },
                     })
                   }
@@ -5218,7 +5273,7 @@ function App() {
                 ],
                 onSubmit: async (v) => {
                   await request("/api/import/commit", { ...v, id: p.id });
-                  await refresh();
+                  await refreshAfterSave();
                 },
               });
             }}
@@ -5391,21 +5446,50 @@ function Buyer({ token }: { token: string }) {
   const [data, setData] = useState<Row | null>(null);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
+  const [loadError, setLoadError] = useState("");
+  const [unavailable, setUnavailable] = useState(false);
+  const [sending, setSending] = useState(false);
+  const [editing, setEditing] = useState(false);
+  const [decision, setDecision] = useState("Interested");
+  const [note, setNote] = useState("");
+  const sendingRef = useRef(false);
+  const updateButton = useRef<HTMLButtonElement>(null);
+  const focusBuyerUpdate = useRef(false);
+  const decisionInput = useRef<HTMLSelectElement>(null);
+  useEffect(() => {
+    if (!editing && focusBuyerUpdate.current) {
+      focusBuyerUpdate.current = false;
+      updateButton.current?.focus();
+    }
+  }, [editing]);
   useEffect(() => {
     request(`/api/buyer/${token}`)
-      .then(setData)
-      .catch((e) => setError(e.message));
+      .then((selection) => {
+        setData(selection);
+        const last = rows(selection.decisions).at(-1);
+        if (last) {
+          setDecision(str(last, "decision"));
+          setNote(str(last, "note"));
+          setNotice("Response recorded. A hold request does not reserve stock until Sales confirms.");
+        } else setEditing(true);
+      })
+      .catch((e) => {
+        setUnavailable(e instanceof ApiError && [404, 410].includes(e.status));
+        setLoadError(e.message);
+      });
   }, [token]);
   return (
     <main className="buyer-page">
       <p className="muted">Private buyer selection</p>
-      <h1>{data ? str(data, "title") : "Opening selection…"}</h1>
-      {error && (
-        <p className="error" role="alert">
-          {error}
-        </p>
+      <h1>{unavailable ? "Selection unavailable" : data ? str(data, "title") : loadError ? "Could not open selection" : "Opening selection…"}</h1>
+      {unavailable ? (
+        <p role="alert">This link has expired or is no longer available. Ask your sales contact for a new link.</p>
+      ) : loadError && (
+        <div className="error" role="alert">
+          {loadError} <button className="text-button" onClick={() => location.reload()}>Try again</button>
+        </div>
       )}
-      {data && (
+      {data && !unavailable && (
         <>
           <p>
             {str(data, "business")} · Expires{" "}
@@ -5445,7 +5529,7 @@ function Buyer({ token }: { token: string }) {
                       ))
                     : "No original documents shared",
               },
-              { label: "Price", render: (s) => `${s.price} ${s.currency}` },
+              { label: "Price", render: (s) => baseMoney(s.price, str(s, "currency"), s.minorUnits, true) },
               {
                 label: "Availability",
                 render: (s) =>
@@ -5455,23 +5539,39 @@ function Buyer({ token }: { token: string }) {
               },
             ]}
           />
-          <form
-            onSubmit={async (e) => {
-              e.preventDefault();
-              const fields = Object.fromEntries(new FormData(e.currentTarget));
+          {notice && <p role="status">{notice}</p>}
+          {!editing && notice && (
+            <button ref={updateButton} className="secondary" onClick={() => {
+              setEditing(true);
+              requestAnimationFrame(() => decisionInput.current?.focus());
+            }}>
+              Update decision
+            </button>
+          )}
+          {editing && <form aria-busy={sending}
+            onSubmit={async (event) => {
+              event.preventDefault();
+              if (sendingRef.current) return;
+              sendingRef.current = true;
+              setSending(true);
+              setError("");
               try {
-                await request(`/api/buyer/${token}`, fields);
-                setNotice(
-                  "Response recorded. A hold request does not reserve stock until Sales confirms.",
-                );
+                await request(`/api/buyer/${token}`, { decision, note });
+                setNotice("Response recorded. A hold request does not reserve stock until Sales confirms.");
+                focusBuyerUpdate.current = true;
+                setEditing(false);
               } catch (e) {
-                setError((e as Error).message);
+                if (e instanceof ApiError && [404, 410].includes(e.status)) setUnavailable(true);
+                else setError((e as Error).message);
+              } finally {
+                setSending(false);
+                sendingRef.current = false;
               }
             }}
           >
             <label>
               Your decision
-              <select name="decision" defaultValue="Interested">
+              <select ref={decisionInput} name="decision" value={decision} disabled={sending} onChange={(event) => setDecision(event.target.value)}>
                 <option>Interested</option>
                 <option>Request hold</option>
                 <option>Decline</option>
@@ -5479,11 +5579,11 @@ function Buyer({ token }: { token: string }) {
             </label>
             <label>
               Message (optional)
-              <textarea name="note" maxLength={1000} />
+              <textarea name="note" maxLength={1000} value={note} disabled={sending} onChange={(event) => setNote(event.target.value)} />
             </label>
-            <button className="primary">Send decision</button>
-          </form>
-          {notice && <p role="status">{notice}</p>}
+            {error && <p className="error" role="alert">{error}</p>}
+            <button className="primary" disabled={sending}>{sending ? "Sending…" : "Send decision"}</button>
+          </form>}
         </>
       )}
     </main>

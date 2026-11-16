@@ -120,12 +120,8 @@ test("persistent parcel journey, buyer-safe sharing, navigation and responsive a
   await dialog
     .getByLabel("Customer", { exact: true })
     .selectOption({ label: "Training buyer" });
-  const stones = await dialog
-    .getByLabel("Stones", { exact: true })
-    .locator("option")
-    .all();
-  const id = await stones[0].getAttribute("value");
-  await dialog.getByLabel("Stones", { exact: true }).selectOption(id!);
+  await dialog.getByRole("group", { name: "Stones", exact: true })
+    .getByRole("checkbox", { name: /Training blue sapphire/ }).check();
   await dialog.getByLabel("Price per selected stone").fill("200.00");
   await dialog.getByRole("button", { name: "Save quote" }).click();
   await expect(page.getByRole("dialog")).toHaveCount(0);
@@ -412,8 +408,8 @@ test("document review, private buyer pack, holds, memo return and cutter handoff
     .getByLabel("Approved buyer-facing wording")
     .fill("Training parcel. Not authentic laboratory evidence.");
   await dialog
-    .getByLabel("Documents approved for buyer sharing")
-    .selectOption({ label: "training-evidence.pdf" });
+    .getByRole("group", { name: /Documents approved for buyer sharing/ })
+    .getByRole("checkbox", { name: "training-evidence.pdf" }).check();
   await dialog.getByRole("button", { name: "Approve wording" }).click();
   await page
     .getByRole("dialog")
@@ -452,11 +448,10 @@ test("document review, private buyer pack, holds, memo return and cutter handoff
   await dialog
     .getByLabel("Customer", { exact: true })
     .selectOption({ label: "Training buyer" });
-  const candidate = dialog
-    .getByLabel("Stones", { exact: true })
-    .getByRole("option", { name: /Training purchased parcel/ });
-  const stoneId = await candidate.getAttribute("value");
-  await dialog.getByLabel("Stones", { exact: true }).selectOption(stoneId!);
+  const chosenStone = () => page.getByRole("dialog")
+    .getByRole("group", { name: "Stones", exact: true })
+    .getByRole("checkbox", { name: /Training purchased parcel/ });
+  await chosenStone().check();
   await dialog.getByRole("button", { name: "Create private link" }).click();
   await expect(page.getByRole("dialog")).toHaveCount(0);
   const href = await page
@@ -480,7 +475,7 @@ test("document review, private buyer pack, holds, memo return and cutter handoff
   await dialog
     .getByLabel("Customer", { exact: true })
     .selectOption({ label: "Training buyer" });
-  await dialog.getByLabel("Stones", { exact: true }).selectOption(stoneId!);
+  await chosenStone().check();
   await dialog
     .getByLabel("Return due")
     .fill(new Date(Date.now() + 86400000).toISOString().slice(0, 16));

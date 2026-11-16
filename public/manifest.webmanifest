@@ -1,7 +1,7 @@
 {
   "id": "/",
   "name": "Gem Management",
-  "short_name": "Gem Stock",
+  "short_name": "Gem Management",
   "description": "Gemstone inventory, evidence, custody, and sales.",
   "start_url": "/",
   "scope": "/",

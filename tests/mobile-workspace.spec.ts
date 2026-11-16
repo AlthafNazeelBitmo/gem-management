@@ -136,16 +136,16 @@ test("phone shell reserves safe areas and stock keeps its identity, controls, an
   await nav.getByRole("button", { name: "Overview" }).tap();
   await expect.poll(() => page.evaluate(() => scrollY)).toBe(0);
 
-  await page.getByRole("button", { name: "Search stock" }).tap();
+  await page.getByRole("button", { name: "Search inventory" }).tap();
   await expect(page.getByRole("heading", { name: "Inventory" })).toBeVisible();
   await expect(
     page.getByRole("button", { name: "Receive stock", exact: true }),
   ).toHaveCount(1);
-  await page.getByRole("searchbox", { name: "Search stock" }).fill("spinel");
+  await page.getByRole("searchbox", { name: "Search inventory" }).fill("spinel");
   await page.getByRole("button", { name: "Done" }).tap();
   await expect(page.locator(".records-stock tbody tr")).toHaveCount(1);
   await expect(
-    page.getByRole("button", { name: "Search stock" }),
+    page.getByRole("button", { name: "Search inventory" }),
   ).toBeFocused();
   await page
     .locator(".stock-search-summary")
@@ -156,7 +156,7 @@ test("phone shell reserves safe areas and stock keeps its identity, controls, an
   );
   await page.getByRole("button", { name: "Filters" }).tap();
   await page
-    .getByLabel("Laboratory Evidence", { exact: true })
+    .getByLabel("Evidence", { exact: true })
     .filter({ visible: true })
     .selectOption("Review needed");
   await page.getByRole("button", { name: "Done", exact: true }).tap();
@@ -291,7 +291,7 @@ test("role tabs, unconfigured AI, and Home Screen assets", async ({
   await page.goto("/");
   const nav = page.getByRole("navigation", { name: "Quick navigation" });
   await expect(
-    nav.getByRole("button", { name: "Stock", exact: true }),
+    nav.getByRole("button", { name: "Inventory", exact: true }),
   ).toHaveCount(0);
   await expect(nav.getByRole("button", { name: "Payments" })).toBeVisible();
   await nav.getByRole("button", { name: "More workspaces" }).tap();

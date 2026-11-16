@@ -26,7 +26,21 @@ import {
   settings,
   saveSettings,
   dataDirectory,
+  initNeon,
+  pgPool,
+  syncUser,
+  syncSession,
+  deleteSession,
+  syncFile,
 } from "./db.mjs";
+import { createRealtime, rawSql } from "@neon/realtime/server";
+
+export const realtime = process.env.NEON_REALTIME_SECRET
+  ? createRealtime({
+      secret: process.env.NEON_REALTIME_SECRET,
+      db: "neondb",
+    })
+  : null;
 import {
   roles,
   allow,
@@ -91,12 +105,14 @@ function userView(u) {
 function session(req, res, u) {
   const raw = randomBytes(32).toString("hex"),
     csrf = randomBytes(24).toString("hex");
+  const expires = new Date(Date.now() + 12 * 3600000).toISOString();
   db.prepare("INSERT INTO sessions VALUES(?,?,?,?)").run(
     hash(raw),
     u.id,
-    new Date(Date.now() + 12 * 3600000).toISOString(),
+    expires,
     csrf,
   );
+  syncSession(hash(raw), u.id, expires, csrf);
   res.cookie("gem_session", raw, {
     httpOnly: true,
     sameSite: "lax",
@@ -148,7 +164,29 @@ app.use("/api", (req, res, next) => {
   }
   next();
 });
-app.get("/api/health", (_, res) => res.json({ ok: true }));
+app.get("/api/health", async (_, res) => {
+  let pgStatus = false;
+  if (pgPool) {
+    try {
+      await pgPool.query("SELECT 1");
+      pgStatus = true;
+    } catch {
+      pgStatus = false;
+    }
+  }
+  res.json({
+    ok: true,
+    postgres: pgPool ? (pgStatus ? "connected" : "error") : "sqlite",
+    realtime: !!process.env.NEON_REALTIME_SECRET,
+  });
+});
+app.get("/api/realtime/info", (_, res) => {
+  res.json({
+    configured: !!process.env.NEON_REALTIME_URL && !!process.env.NEON_REALTIME_SECRET,
+    url: process.env.NEON_REALTIME_URL || null,
+    branch: process.env.NEON_BRANCH || null,
+  });
+});
 app.get("/api/auth", (req, res) => {
   const raw = (req.headers.cookie || "")
     .split(";")
@@ -199,6 +237,7 @@ app.post("/api/setup", (req, res) => {
       u.role,
       1,
     );
+    syncUser(u);
     saveSettings({
       name: text(req.body.businessName, "Business name", 150),
       currency,
@@ -237,7 +276,7 @@ app.post("/api/login", (req, res) => {
   res.json({ user: session(req, res, u) });
 });
 app.use("/api", (req, res, next) => {
-  if (req.path.startsWith("/buyer/")) return next();
+  if (req.path.startsWith("/buyer/") || req.path.startsWith("/realtime/")) return next();
   const raw = (req.headers.cookie || "")
     .split(";")
     .map((x) => x.trim())
@@ -265,6 +304,7 @@ app.use("/api", (req, res, next) => {
 });
 app.post("/api/logout", (req, res) => {
   db.prepare("DELETE FROM sessions WHERE token=?").run(req.session.token);
+  deleteSession(req.session.token);
   res.clearCookie("gem_session", { path: "/" });
   res.json({ ok: true });
 });
@@ -294,6 +334,29 @@ const allowedCollections = {
   shows: ["Owner", "Sales staff", "Inventory clerk"],
   fileMeta: ["Owner", "Inventory clerk", "Gem reviewer"],
 };
+app.post("/api/realtime/seal", async (req, res) => {
+  if (!realtime) {
+    return res.status(503).json({ error: "Neon Realtime is not configured." });
+  }
+  try {
+    const kind = req.body?.kind || "stones";
+    const allowed = allowedCollections[kind];
+    if (allowed && req.user && !allowed.includes(req.user.role)) {
+      return res.status(403).json({ error: "Unauthorized collection." });
+    }
+    const query = rawSql("SELECT kind, id, data FROM records WHERE kind = $1", [kind]);
+    const sealed = await realtime.seal({ query });
+    res.json({
+      sealed,
+      url: process.env.NEON_REALTIME_URL,
+      branch: process.env.NEON_BRANCH,
+      kind,
+    });
+  } catch (err) {
+    console.error("Failed to seal query:", err);
+    res.status(500).json({ error: "Failed to seal realtime query." });
+  }
+});
 function cleanStone(s, user) {
   const out = { ...s };
   if (!["Owner", "Accounts"].includes(user.role))
@@ -391,7 +454,13 @@ app.get("/api/workspace", (req, res) => {
   res.json(out);
 });
 app.post("/api/commands/:action", (req, res) => {
-  const result = command(req.user, req.params.action, req.body);
+  const id = req.get("Idempotency-Key");
+  if (id && !/^[0-9a-f-]{36}$/i.test(id)) fail("Invalid save reference.");
+  const receipt = id ? {
+    id,
+    fingerprint: hash(JSON.stringify([req.params.action, req.body])),
+  } : undefined;
+  const result = command(req.user, req.params.action, req.body, receipt);
   let safe = result;
   if (
     [
@@ -436,6 +505,7 @@ app.post("/api/users", (req, res) => {
       u.role,
       1,
     );
+    syncUser(u);
     audit(req.user, "User created", u.id, null, userView(u));
   });
   res.json(userView(u));
@@ -510,6 +580,7 @@ app.post("/api/files", upload.single("file"), (req, res) => {
       b,
       meta.createdAt,
     );
+    syncFile(id, s.id, meta.name, mime, b, meta.createdAt);
     put("fileMeta", meta);
     change(
       req.user,
@@ -762,6 +833,7 @@ app.get("/api/buyer/:token", (req, res) => {
       disclosureVersion: s.approvedVersion,
       price: s.price,
       currency: settings().currency,
+      minorUnits: settings().minorUnits,
       reports: (s.buyerFileIds || [])
         .map((id) => {
           const f = get("fileMeta", id);
@@ -816,6 +888,8 @@ app.post("/api/buyer/:token", (req, res) => {
       note: String(req.body.note || "").slice(0, 1000),
       at: now(),
     };
+    const last = sel.decisions.at(-1);
+    if (last?.decision === decision.decision && last.note === decision.note) return;
     sel.decisions.push(decision);
     put("selections", sel);
     audit(
@@ -1169,11 +1243,13 @@ app.use((err, req, res, next) => {
       status === 500
         ? "The server could not complete this action."
         : err.message,
+    ...(status === 400 && typeof err.field === "string" ? { field: err.field } : {}),
   });
 });
 export default app;
 
 if (!process.env.VERCEL && process.env.NODE_ENV !== "test") {
+  await initNeon();
   const port = Number(process.env.API_PORT || 3001);
   const server = app.listen(port, process.env.API_HOST || "127.0.0.1", () =>
     console.log(`Gem API ready at http://127.0.0.1:${port}`),
@@ -1181,8 +1257,9 @@ if (!process.env.VERCEL && process.env.NODE_ENV !== "test") {
 
   for (const signal of ["SIGINT", "SIGTERM"])
     process.on(signal, () =>
-      server.close(() => {
+      server.close(async () => {
         db.close();
+        if (pgPool) await pgPool.end();
         process.exit(0);
       }),
     );

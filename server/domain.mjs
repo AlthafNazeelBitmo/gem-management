@@ -2,6 +2,7 @@ import Decimal from "decimal.js";
 import { purchasing, markSupplierSale } from "./purchasing.mjs";
 import { randomUUID } from "node:crypto";
 import {
+  db,
   all,
   get,
   put,
@@ -20,21 +21,22 @@ export const roles = [
   "Cutter / lab liaison",
   "Gem reviewer",
 ];
-export function fail(message, status = 400) {
-  throw Object.assign(new Error(message), { status });
+export function fail(message, status = 400, field) {
+  throw Object.assign(new Error(message), { status, field });
 }
 export function text(v, label, max = 500) {
   if (typeof v !== "string" || !v.trim() || v.trim().length > max)
-    fail(`${label} is required (up to ${max} characters).`);
+    fail(`${label} is required (up to ${max} characters).`, 400, label);
   return v.trim();
 }
 export function amount(v, label = "Amount", places = 2, zero = true) {
   if (typeof v !== "string" || !/^\d{1,12}(\.\d+)?$/.test(v))
-    fail(`${label} must be a positive decimal number.`);
+    fail(`${label} must be a positive decimal number.`, 400, label);
   const n = new Decimal(v);
   if (n.decimalPlaces() > places || (zero ? n.lt(0) : n.lte(0)))
     fail(
       `${label} requires ${places} decimal places at most${zero ? "" : " and must be greater than zero"}.`,
+      400, label,
     );
   return n.toFixed(places);
 }
@@ -132,7 +134,7 @@ export function createStone(user, b) {
     updatedAt: now(),
   };
   if (!Number.isInteger(s.count) || s.count < 1 || s.count > 100000)
-    fail("Count must be a positive whole number.");
+    fail("Count must be a positive whole number.", 400, "Count");
   if (s.ownershipShares.length) {
     const shares = s.ownershipShares.map((x) => ({
       ...x,
@@ -150,14 +152,14 @@ export function createStone(user, b) {
 export function currencyInfo(code, rate = "1") {
   const currency = String(code || settings().currency).toUpperCase();
   if (!Intl.supportedValuesOf("currency").includes(currency))
-    fail("Choose a supported three-letter currency code.");
+    fail("Choose a supported three-letter currency code.", 400, "Currency");
   const places = new Intl.NumberFormat("en", {
     style: "currency",
     currency,
   }).resolvedOptions().maximumFractionDigits;
   const exchangeRate = amount(rate, "Exchange rate", 6, false);
   if (currency === settings().currency && !new Decimal(exchangeRate).eq(1))
-    fail("Base-currency transactions require an exchange rate of 1.");
+    fail("Base-currency transactions require an exchange rate of 1.", 400, "Exchange rate");
   return { currency, places, exchangeRate };
 }
 export function createInvoice(user, b, fromMemo = false, device = "") {
@@ -298,8 +300,9 @@ export function balance(inv) {
     )
     .toFixed(inv.minorUnits ?? settings().minorUnits);
 }
-export function command(user, action, b) {
-  return transaction(() => {
+// Store command receipts in the same SQLite transaction as the business action.
+export function command(user, action, b, receipt) {
+  const applyCommand = () => {
     expireHolds(user);
     const purchaseResult = purchasing(user, action, b);
     if (purchaseResult) return purchaseResult;
@@ -1122,5 +1125,23 @@ export function command(user, action, b) {
       default:
         fail("Unknown action.", 404);
     }
+  };
+  return transaction(() => {
+    if (!receipt) return applyCommand();
+    db.prepare("DELETE FROM command_receipts WHERE expires <= ?").run(now());
+    const previous = db.prepare(
+      "SELECT fingerprint, result FROM command_receipts WHERE user_id = ? AND request_id = ?",
+    ).get(user.id, receipt.id);
+    if (previous) {
+      if (previous.fingerprint !== receipt.fingerprint)
+        fail("This save reference has already been used for another action.", 409);
+      return JSON.parse(previous.result);
+    }
+    const result = applyCommand();
+    db.prepare("INSERT INTO command_receipts VALUES (?, ?, ?, ?, ?)").run(
+      user.id, receipt.id, receipt.fingerprint, JSON.stringify(result),
+      new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
+    );
+    return result;
   });
 }

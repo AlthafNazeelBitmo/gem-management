@@ -3,16 +3,16 @@
   color: #1e293b;
   background: #f5f6fa;
   font-synthesis: none;
-  font-size: 14px;
+  font-size: 87.5%;
   --page: #f5f6fa;
   --surface: #ffffff;
-  --sidebar: #ffffff;
+  --sidebar: #f5f4f0;
   --ink: #1e293b;
   --muted: #5b6b82;
   --line: #eaedf2;
-  --accent: #5b4df2;
-  --accent-text: #5141dc;
-  --accent-hover: #4d3ee0;
+  --accent: #270286;
+  --accent-text: #270286;
+  --accent-hover: #4a22b0;
   --accent-light: #ede9fe;
   --hover: #f1f5f9;
   --danger: #b91c1c;
@@ -213,6 +213,7 @@ button,
 }
 .filter-toggle-pill {
   border-style: dashed;
+  transition: opacity 100ms ease;
 }
 .filter-toggle-pill.active-filter {
   border-style: solid;
@@ -638,47 +639,6 @@ main {
   gap: 16px;
   flex: 1;
 }
-.global-search-container {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  background: var(--surface);
-  border: 1px solid #d1d5db;
-  border-radius: var(--radius);
-  padding: 0 12px;
-  height: 40px;
-  width: 420px;
-  max-width: 100%;
-  color: var(--muted);
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
-  transition: background-color 150ms ease, border-color 150ms ease, opacity 100ms ease;
-}
-:root[data-theme="dark"] .global-search-container {
-  background: #1e293b;
-  border-color: #475569;
-}
-.global-search-container:focus-within {
-  border-color: var(--accent-text);
-  box-shadow: 0 0 0 1px var(--accent);
-  background: var(--surface);
-}
-.global-search-container svg {
-  flex-shrink: 0;
-  color: #64748b;
-}
-.global-search-input {
-  border: 0;
-  background: transparent;
-  outline: none;
-  font-size: 13.5px;
-  color: var(--ink);
-  width: 100%;
-  padding: 0;
-}
-.global-search-input::placeholder {
-  color: #94a3b8;
-  font-size: 13px;
-}
 .search-clear-btn {
   border: 0;
   background: transparent;
@@ -952,7 +912,7 @@ main {
 .view-toggle-btn {
   border: 0;
   background: transparent;
-  color: #475569;
+  color: var(--muted);
   width: 30px;
   height: 30px;
   border-radius: 6px;
@@ -1045,23 +1005,6 @@ main {
   outline-offset: 2px;
 }
 
-/* Refined Domain-Specific Filter Bar (fixes F-08 & F-10) */
-.inventory-filters-bar {
-  display: flex;
-  align-items: flex-end;
-  gap: 16px;
-  padding: 14px 24px;
-  background: color-mix(in srgb, var(--page) 40%, var(--surface));
-  border-bottom: 1px solid var(--line);
-  flex-wrap: wrap;
-}
-.filter-group {
-  display: flex;
-  flex-direction: column;
-  gap: 5px;
-  min-width: 170px;
-  flex: 1;
-}
 .filter-label {
   font-size: 11px;
   font-weight: 600;
@@ -2138,51 +2081,156 @@ footer {
 .auth-shell {
   min-height: 100dvh;
   display: grid;
-  grid-template-columns: 1.1fr 1fr;
-}
-.auth-story {
-  background: var(--sidebar);
-  padding: 12vh 10%;
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-}
-.auth-story > svg {
-  width: 36px;
-  height: 36px;
-  color: var(--accent-text);
-  margin-bottom: 56px;
-}
-.auth-story h1 {
-  font-size: clamp(36px, 4vw, 60px);
-  line-height: 1.15;
-  letter-spacing: -2px;
-}
-.auth-story > p {
-  font-size: 17px;
-  color: var(--muted);
-  margin-top: 18px;
-}
-.auth-note {
-  margin-top: auto;
-  padding-top: 70px;
-  color: var(--muted);
-  font-size: 12px;
-  line-height: 1.7;
+  align-content: safe center;
+  justify-items: center;
+  padding: calc(24px + var(--safe-top)) max(16px, var(--safe-right))
+    calc(24px + var(--safe-bottom)) max(16px, var(--safe-left));
 }
 .auth-form {
-  align-self: center;
-  padding: 50px clamp(25px, 6vw, 110px);
-  max-width: 680px;
-  width: 100%;
+  width: min(100%, 420px);
+  min-width: 0;
 }
-.auth-form h2 {
-  font-size: 27px;
-  margin-bottom: 10px;
+.auth-setup .auth-form {
+  width: min(100%, 480px);
 }
-.auth-form > p {
+.auth-heading {
+  text-align: center;
+  margin-bottom: 24px;
+}
+.auth-icon {
+  display: block;
+  margin: 0 auto 14px;
+  border-radius: 15px;
+  box-shadow: 0 3px 12px #17112326;
+}
+.auth-brand {
   color: var(--muted);
-  margin-bottom: 28px;
+  font-weight: 600;
+  margin: 0 0 4px;
+}
+.auth-heading h1 {
+  font-size: clamp(27px, 7vw, 36px);
+  letter-spacing: -0.04em;
+  margin-bottom: 7px;
+}
+.auth-heading > p:last-child {
+  color: var(--muted);
+  line-height: 1.5;
+  margin: 0;
+}
+.auth-fields {
+  display: grid;
+  gap: 14px;
+}
+.auth-group {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+  margin: 0;
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: var(--surface);
+}
+.auth-group legend {
+  padding-inline: 5px;
+  color: var(--ink);
+  font-weight: 650;
+}
+.auth-fields label {
+  margin: 0;
+  color: var(--ink);
+  font-size: 14px;
+}
+.auth-password > label {
+  margin-bottom: 7px;
+}
+.auth-password > small {
+  margin-top: 5px;
+}
+.auth-fields :is(input:not([type="checkbox"]), select) {
+  min-width: 0;
+  min-height: 48px;
+  font-size: 16px;
+  border-radius: 10px;
+  border-color: color-mix(in srgb, var(--muted) 55%, var(--surface));
+}
+.auth-password .password-field button {
+  inset-block: 2px;
+  min-height: 44px;
+}
+.auth-fields select {
+  appearance: none;
+  padding-inline-end: 29px;
+  text-overflow: ellipsis;
+}
+.auth-fields label:has(> select) {
+  position: relative;
+}
+.auth-fields label:has(> select)::after {
+  position: absolute;
+  inset-inline-end: 13px;
+  bottom: 21px;
+  width: 6px;
+  height: 6px;
+  border: solid var(--muted);
+  border-width: 0 1.5px 1.5px 0;
+  transform: rotate(45deg);
+  pointer-events: none;
+  content: "";
+}
+.auth-currency {
+  display: grid;
+  grid-template-columns: minmax(0, 1.45fr) minmax(0, 1fr);
+  align-items: end;
+  gap: 10px;
+}
+.auth-training.check-label {
+  min-height: 44px;
+  align-items: center;
+  padding-block: 3px;
+}
+.auth-submit.primary {
+  min-height: 50px;
+  width: 100%;
+  border-radius: 12px;
+  font-size: 16px;
+}
+.auth-fields .error {
+  margin: 0;
+}
+.auth-code summary,
+.auth-install summary {
+  min-height: 44px;
+  padding-block: 12px;
+  font-weight: 600;
+  color: var(--accent-text);
+  cursor: pointer;
+}
+.auth-code label {
+  margin-bottom: 6px;
+}
+.auth-code small {
+  margin-top: 5px;
+}
+.auth-retry {
+  display: block;
+  min-height: 44px;
+  margin: 8px auto 0;
+}
+.auth-install {
+  margin: 12px auto 0;
+  color: var(--muted);
+  text-align: center;
+}
+.auth-install > p {
+  margin: 0;
+  font-size: 13px;
+}
+@media (display-mode: standalone), (min-width: 761px) and (pointer: fine) {
+  .auth-install {
+    display: none;
+  }
 }
 .loading-page {
   padding: 15vh 10vw;
@@ -2735,7 +2783,10 @@ footer {
     padding-left: 40px;
   }
   .records-stock-preview tbody > tr {
-    grid-template-columns: .8fr 1fr 1fr;
+    grid-template-columns: minmax(0, .8fr) repeat(2, minmax(0, 1fr));
+  }
+  .records-table .status-text {
+    white-space: normal;
   }
   .record-link.stone-cell {
     width: 100%;
@@ -2787,9 +2838,6 @@ footer {
   select,
   textarea {
     min-height: 44px;
-  }
-  .auth-shell {
-    padding: var(--safe-top) var(--safe-right) var(--safe-bottom) var(--safe-left);
   }
   .buyer-page {
     padding: calc(20px + var(--safe-top)) max(16px, var(--safe-right))
@@ -2886,36 +2934,6 @@ footer {
     flex: 1 1 auto;
   }
 
-  .auth-shell {
-    display: block;
-  }
-  .auth-story {
-    padding: 20px;
-    gap: 9px;
-    border-bottom: 1px solid var(--line);
-  }
-  .auth-story > svg {
-    width: 30px;
-    height: 30px;
-    margin: 0;
-  }
-  .auth-story h1 {
-    font-size: 30px;
-    letter-spacing: -0.035em;
-    margin: 0;
-  }
-  .auth-story p {
-    font-size: 14px;
-    margin: 0;
-  }
-  .auth-note {
-    display: none;
-  }
-  .auth-form {
-    padding: 22px 20px;
-    max-width: 520px;
-    margin-inline: auto;
-  }
   .check-label {
     min-height: 44px;
   }
@@ -3043,5 +3061,143 @@ footer {
 @media (hover: hover) and (pointer: fine) {
   .password-field button:hover {
     background: var(--hover);
+  }
+}
+
+/* Keep chrome flexible while leaving horizontal scrolling inside dense records. */
+.toolbar-start {
+  min-width: 0;
+}
+.toolbar-end {
+  flex-shrink: 0;
+}
+.inventory-search-trigger {
+  display: inline-flex;
+  gap: 8px;
+  width: auto;
+  min-height: 40px;
+  padding-inline: 12px;
+  white-space: nowrap;
+}
+.nav-destination {
+  position: relative;
+  min-width: 0;
+}
+.nav-destination > button {
+  width: 100%;
+}
+.nav-destination:has(.nav-count) > button {
+  padding-inline-end: 40px;
+}
+.nav-destination > .nav-count {
+  position: absolute;
+  inset-inline-end: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  pointer-events: none;
+}
+.nav-destination > button.active + .nav-count {
+  background: var(--surface);
+  color: var(--accent-text);
+}
+.status-summary div {
+  gap: 8px;
+}
+.status-summary div > span {
+  overflow-wrap: anywhere;
+}
+.work-list .attention-readonly {
+  padding: 12px 10px;
+  border-block-start: 1px solid var(--line);
+}
+.work-list .attention-readonly .status-text {
+  margin-block: 4px;
+}
+.active-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 10px 14px;
+  border-block-end: 1px solid var(--line);
+}
+.active-filters button {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.card-actions-left,
+.card-search-box,
+.card-search-box input {
+  min-width: 0;
+}
+.option-checklist {
+  min-inline-size: 0;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 10px 12px;
+}
+.option-checklist legend {
+  padding: 0 4px;
+  font-weight: 600;
+}
+.checklist-options {
+  max-block-size: 15rem;
+  overflow: auto;
+}
+.checklist-options label {
+  min-block-size: 44px;
+}
+.checklist-options [hidden] {
+  display: none !important;
+}
+html {
+  scroll-padding-block-start: 84px;
+}
+@media (min-width: 761px) {
+  .records-stock [data-mobile="identity"],
+  .records-stock-preview [data-mobile="identity"] {
+    min-inline-size: 15rem;
+  }
+}
+@media (min-width: 761px) and (max-width: 1050px) {
+  .toolbar .user-info {
+    display: none;
+  }
+  .toolbar .user-profile-pill {
+    min-width: 44px;
+    min-height: 44px;
+    justify-content: center;
+    padding: 4px;
+  }
+}
+@media screen and (max-width: 760px), screen and (max-width: 920px) and (pointer: coarse) {
+  html {
+    scroll-padding-block-start: calc(var(--mobile-toolbar-height) + var(--safe-top) + 12px);
+  }
+  .toolbar-start {
+    flex: 0 0 auto;
+    margin-inline-start: auto;
+  }
+  .toolbar-start:empty {
+    display: none;
+  }
+  .inventory-search-trigger {
+    display: grid;
+    padding: 0;
+  }
+  .records-stock [data-mobile="identity"],
+  .records-stock-preview [data-mobile="identity"] {
+    min-inline-size: 0;
+  }
+}
+.field-error {
+  color: var(--danger);
+  font-weight: 600;
+}
+[aria-invalid="true"] {
+  border-color: var(--danger);
+}
+@media (max-width: 350px) {
+  .mobile-toolbar-title {
+    font-size: 0.92rem;
   }
 }
