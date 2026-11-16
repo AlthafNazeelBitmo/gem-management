@@ -1,0 +1,347 @@
+/* Shared controls: modest elevation for pickers, quiet surfaces for persistent bars. */
+:root {
+  --control-radius: 10px;
+  --control-fill: color-mix(in srgb, var(--surface) 86%, var(--page));
+  --control-line: color-mix(in srgb, var(--muted) 46%, var(--surface));
+  --control-selected: color-mix(in srgb, var(--accent-light) 68%, var(--surface));
+  --control-chevron: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 16 16' fill='none'%3E%3Cpath d='m4 6 4 4 4-4' stroke='%235b6b82' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+}
+:root[data-theme="dark"] {
+  --control-chevron: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 16 16' fill='none'%3E%3Cpath d='m4 6 4 4 4-4' stroke='%23cbd5e1' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+}
+
+select:not([multiple]):not([size]),
+.filter-sheet-field select {
+  appearance: none;
+  block-size: auto;
+  min-block-size: 44px;
+  min-inline-size: 0;
+  border: 1px solid var(--control-line);
+  border-radius: var(--control-radius);
+  background: var(--control-chevron) right 12px center / 16px 16px no-repeat var(--control-fill);
+  color: var(--ink);
+  padding: 0.625em 36px 0.625em 12px;
+  text-overflow: ellipsis;
+  cursor: pointer;
+}
+select:not([multiple]):not([size]):dir(rtl) {
+  background-position: left 12px center;
+  padding-inline: 12px 36px;
+}
+select[aria-invalid="true"]:not([multiple]) {
+  border-color: var(--danger);
+}
+select:disabled {
+  cursor: not-allowed;
+  opacity: 0.65;
+}
+select:focus-visible {
+  outline: 2px solid var(--accent-text);
+  outline-offset: 2px;
+}
+@media (hover: hover) and (pointer: fine) {
+  select:not([multiple]):not([size]):hover:not(:disabled) {
+    border-color: var(--muted);
+  }
+}
+
+/* Keep the platform picker on touch and in browsers without customizable selects. */
+@supports (appearance: base-select) and selector(::picker(select)) {
+  @media (pointer: fine) and (forced-colors: none) {
+    select:not([multiple]):not([size]),
+    select:not([multiple]):not([size])::picker(select) {
+      appearance: base-select;
+    }
+    select:not([multiple]):not([size]) {
+      background-image: none;
+      padding: 0.625em 12px;
+      gap: 8px;
+    }
+    select:not([multiple]):not([size])::picker-icon {
+      content: "";
+      inline-size: 7px;
+      block-size: 7px;
+      margin: -3px 2px 0 3px;
+      border: solid currentColor;
+      border-width: 0 1.5px 1.5px 0;
+      transform: rotate(45deg);
+      color: var(--muted);
+      transition: rotate 140ms ease-out;
+      flex-shrink: 0;
+    }
+    select:not([multiple]):not([size]):open::picker-icon {
+      rotate: 180deg;
+      color: var(--accent-text);
+    }
+    select:not([multiple]):not([size]):open:not([aria-invalid="true"]) {
+      border-color: var(--accent-text);
+    }
+    select::picker(select) {
+      margin-block: 5px;
+      padding: 5px;
+      max-block-size: min(22rem, 55dvh);
+      max-inline-size: min(32rem, calc(100vw - 24px));
+      border: 1px solid var(--control-line);
+      border-radius: 12px;
+      background: var(--surface);
+      color: var(--ink);
+      box-shadow: 0 8px 24px #0b101d26;
+      overscroll-behavior: contain;
+    }
+    select:not([multiple]):not([size]) option {
+      min-block-size: 36px;
+      padding: 7px 10px;
+      gap: 10px;
+      border-radius: 6px;
+      white-space: normal;
+      overflow-wrap: anywhere;
+    }
+    select:not([multiple]):not([size]) option:checked {
+      background: var(--control-selected);
+      color: var(--accent-text);
+      font-weight: 650;
+    }
+    select:not([multiple]):not([size]) option:not(:disabled):is(:hover, :focus-visible) {
+      background: var(--hover);
+    }
+    select:not([multiple]):not([size]) option:focus-visible {
+      outline: 2px solid var(--accent-text);
+      outline-offset: -2px;
+    }
+    select:not([multiple]):not([size]) option::checkmark {
+      order: 1;
+      margin-inline-start: auto;
+      color: var(--accent-text);
+    }
+  }
+}
+@media (forced-colors: active) {
+  select:not([multiple]):not([size]) {
+    appearance: auto;
+    background: Field;
+    color: FieldText;
+    border-color: ButtonBorder;
+    padding-inline-end: 12px;
+  }
+}
+
+/* Workspace chrome */
+.toolbar-context {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  min-width: 0;
+  color: var(--ink);
+  font-weight: 650;
+}
+.toolbar-context svg {
+  flex: 0 0 auto;
+  color: var(--accent-text);
+}
+.toolbar-context span {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.toolbar .toolbar-start {
+  gap: clamp(12px, 2vw, 24px);
+}
+.toolbar-end {
+  gap: 6px;
+}
+.toolbar-end .icon-utility-btn {
+  border-color: transparent;
+  background: transparent;
+  border-radius: var(--control-radius);
+}
+.toolbar-end .user-profile-pill {
+  margin-inline-start: 6px;
+  background: var(--control-fill);
+  border-radius: var(--control-radius);
+}
+.toolbar .inventory-search-trigger {
+  background: var(--control-fill);
+  color: var(--muted);
+  border-radius: var(--control-radius);
+}
+.sidebar nav .nav-destination > button {
+  font-weight: 560;
+  border-radius: 8px;
+}
+.sidebar nav .nav-destination > button.active {
+  background: var(--control-selected);
+  box-shadow: inset 3px 0 var(--accent-text);
+  color: var(--accent-text);
+}
+.sidebar nav .nav-destination > button.active svg {
+  color: var(--accent-text);
+}
+@media (hover: hover) and (pointer: fine) {
+  .toolbar-end .icon-utility-btn:hover,
+  .toolbar-end .user-profile-pill:hover,
+  .toolbar .inventory-search-trigger:hover {
+    background: var(--hover);
+    color: var(--ink);
+  }
+}
+.view-toggle-group,
+.card-search-box,
+.pagination-bar {
+  background: var(--control-fill);
+}
+.view-toggle-group {
+  border-radius: var(--control-radius);
+}
+.secondary.filter-toggle-pill {
+  border: 1px solid var(--control-line);
+  border-radius: var(--control-radius);
+}
+.secondary.filter-toggle-pill.active-filter {
+  background: var(--control-selected);
+  border-color: var(--accent-text);
+}
+.card-action-bar {
+  padding-block: 12px;
+}
+.active-filters button {
+  border-radius: var(--control-radius);
+}
+.pagination-controls {
+  gap: 4px;
+}
+.pagination-controls .page-btn:not(.active) {
+  background: transparent;
+  border-color: transparent;
+}
+@media (hover: hover) and (pointer: fine) {
+  .pagination-controls .page-btn:not(.active):hover:not(:disabled) {
+    background: var(--hover);
+  }
+}
+
+/* Finder and filter dialogs share the same control treatment. */
+.workspace-finder {
+  position: relative;
+  margin: 0;
+}
+.workspace-finder svg {
+  position: absolute;
+  inset-inline-start: 13px;
+  top: 50%;
+  transform: translateY(-50%);
+  pointer-events: none;
+  color: var(--muted);
+}
+.workspace-finder input {
+  padding-inline-start: 40px;
+  min-block-size: 44px;
+  border: 1px solid var(--control-line);
+  border-radius: var(--control-radius);
+  background: var(--control-fill);
+}
+.workspace-finder input::placeholder {
+  color: var(--muted);
+  opacity: 1;
+}
+.workspace-no-match {
+  padding: 8px 2px;
+  margin: 0;
+}
+.more-menu-content {
+  gap: 18px;
+}
+.more-group-grid {
+  background: var(--control-fill);
+}
+.more-item-card {
+  gap: 10px;
+  padding: 9px 11px;
+}
+.more-item-card.active {
+  background: var(--control-selected);
+}
+.more-item-icon {
+  width: 32px;
+  height: 32px;
+  background: transparent;
+}
+.more-item-trailing {
+  display: grid;
+  place-items: center;
+  color: var(--muted);
+  flex-shrink: 0;
+}
+.more-item-trailing svg {
+  width: 14px;
+  height: 14px;
+}
+.more-account-card {
+  background: var(--control-fill);
+}
+.more-account-actions {
+  flex-flow: row wrap;
+}
+.more-account-actions button {
+  margin: 0;
+}
+.inventory-filter-dialog {
+  max-width: 580px;
+}
+.filter-sheet-field > label {
+  margin: 0;
+}
+.filter-sheet-body .dialog-actions {
+  margin-top: 2px;
+}
+.filter-sheet-body > .muted {
+  line-height: 1.5;
+  margin-block: 0 2px;
+}
+@media (min-width: 921px) {
+  .filter-sheet-body {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    align-items: end;
+    gap: 16px;
+  }
+  .filter-sheet-body > :is(.muted, .dialog-actions) {
+    grid-column: 1 / -1;
+  }
+}
+@media screen and (max-width: 760px), screen and (max-width: 920px) and (pointer: coarse) {
+  .toolbar .inventory-search-trigger,
+  .toolbar-end .user-profile-pill {
+    background: transparent;
+    margin-inline-start: 0;
+  }
+  .toolbar-end {
+    gap: 0;
+  }
+  .mobile-tab-bar {
+    border-radius: 18px;
+    padding: 4px;
+    gap: 1px;
+  }
+  .mobile-tab-bar .mobile-tab-btn {
+    border-radius: 13px;
+  }
+  .mobile-tab-bar .mobile-tab-btn.active {
+    background: var(--control-selected);
+  }
+  .mobile-category-pill-bar .category-pill.active {
+    background: var(--control-selected);
+    color: var(--accent-text);
+    border-color: var(--accent-text);
+  }
+  .mobile-category-pill-bar .category-pill.active .pill-count {
+    background: var(--surface);
+  }
+  .workspace-finder input {
+    font-size: 16px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  select::picker-icon {
+    transition: none;
+  }
+}

@@ -227,3 +227,50 @@ test("refresh after a remote show release preserves queued sales without allowin
   expect(cache.authority).toBeNull();
   expect(cache.pending).toContain("EVT-QA");
 });
+
+test("desktop dropdowns preserve native keyboard selection and dismissal", async ({ page }, info) => {
+  await workspace(page);
+  await page.goto("/#Inventory");
+  await page.getByRole("button", { name: "Filters", exact: true }).click();
+  const dialog = page.getByRole("dialog", { name: "Filters & sort" });
+  const custody = dialog.getByLabel("Custody status");
+  await expect(custody).toHaveValue("All stock");
+  const customizable = await custody.evaluate((select) => getComputedStyle(select).appearance === "base-select");
+  if (customizable) {
+    await custody.focus();
+    await page.keyboard.press("Space");
+    await expect.poll(() => custody.evaluate((select) => select.matches(":open"))).toBe(true);
+    await page.screenshot({ path: info.outputPath("desktop-dropdown.png") });
+    await page.keyboard.press("ArrowDown");
+    await page.keyboard.press("Enter");
+    await expect(custody).toHaveValue("Draft");
+    await expect(dialog).toBeVisible();
+  } else {
+    await custody.selectOption("Draft");
+    await expect(custody).toHaveValue("Draft");
+  }
+  await page.keyboard.press("Escape");
+  await expect(dialog).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Filters (1)", exact: true })).toBeFocused();
+});
+
+test.describe("phone workspace finder", () => {
+  test.use({ viewport: { width: 390, height: 844 }, hasTouch: true, colorScheme: "dark", reducedMotion: "reduce" });
+  test("filters destinations without changing access and resets on reopen", async ({ page }, info) => {
+    await workspace(page);
+    await page.goto("/#Inventory");
+    const more = page.getByRole("button", { name: "More workspaces" });
+    await more.click();
+    const dialog = page.getByRole("dialog", { name: "Workspaces & settings" });
+    const finder = dialog.getByRole("searchbox", { name: "Find a workspace" });
+    await page.screenshot({ path: info.outputPath("phone-workspaces.png") });
+    await finder.fill("no workspace here");
+    await expect(dialog.getByRole("status")).toHaveText("No matching workspaces.");
+    await finder.fill("purchasing");
+    await expect(dialog.getByRole("button", { name: /^Evidence / })).toHaveCount(0);
+    await dialog.getByRole("button", { name: /^Purchasing / }).click();
+    await expect(page.getByRole("heading", { name: "Purchasing", exact: true })).toBeVisible();
+    await more.click();
+    await expect(finder).toHaveValue("");
+  });
+});

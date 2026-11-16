@@ -17,6 +17,7 @@ import {
   type Workspace,
 } from "./api";
 import "./styles.css";
+import "./controls.css";
 const ROLES = [
   "Owner",
   "Sales staff",
@@ -453,8 +454,10 @@ function Dialog({
   title,
   children,
   onClose,
+  className,
 }: {
   title: string;
+  className?: string;
   children: React.ReactNode;
   onClose: () => void;
 }) {
@@ -471,6 +474,7 @@ function Dialog({
   return (
     <dialog
       ref={ref}
+      className={className}
       aria-labelledby={id}
       onCancel={(event) => {
         event.preventDefault();
@@ -777,6 +781,11 @@ function App() {
   const [form, setForm] = useState<FormSpec | null>(null);
   const [detail, setDetail] = useState<string | null>(null);
   const [menu, setMenu] = useState(false);
+  const [workspaceQuery, setWorkspaceQuery] = useState("");
+  const openWorkspaceMenu = () => {
+    setWorkspaceQuery("");
+    setMenu(true);
+  };
   const [focusAttention, setFocusAttention] = useState(false);
   const [query, setQuery] = useState("");
   const [customerQuery, setCustomerQuery] = useState("");
@@ -1997,6 +2006,10 @@ function App() {
                 </div>
 
                 <div className="toolbar-start">
+                  <div className="toolbar-context desktop-only" aria-hidden="true">
+                    <Mark name={current} />
+                    <span>{current}</span>
+                  </div>
                   {visible.includes("Inventory") && (
                     <button ref={stockSearchButton} type="button" className="icon-utility-btn inventory-search-trigger"
                       aria-label="Search inventory" title="Search inventory (⌘/Ctrl+K)" onClick={openInventorySearch}>
@@ -2046,7 +2059,7 @@ function App() {
                   <button
                     type="button"
                     className="user-profile-pill"
-                    onClick={() => setMenu(true)}
+                    onClick={openWorkspaceMenu}
                     title={`${user.name} (${user.role})`}
                     aria-label={`${user.name.slice(0, 2).toUpperCase()} ${user.name} ${user.role} — account and workspaces`}
                     aria-haspopup="dialog"
@@ -2486,7 +2499,7 @@ function App() {
                       </div>
                     </div>
 
-                    <button type="button" className="secondary filter-toggle-pill" onClick={() => setFilterSheetOpen(true)} aria-haspopup="dialog">
+                    <button type="button" className={`secondary filter-toggle-pill${activeStockFilters ? " active-filter" : ""}`} onClick={() => setFilterSheetOpen(true)} aria-haspopup="dialog">
                       <Mark name="filter" />
                       Filters {activeStockFilters ? `(${activeStockFilters})` : ""}
                     </button>
@@ -4298,7 +4311,7 @@ function App() {
         <button
           type="button"
           className={`mobile-tab-btn ${menu || moreIsCurrent ? "active" : ""}`}
-          onClick={() => setMenu(true)}
+          onClick={openWorkspaceMenu}
           aria-label="More workspaces"
           aria-expanded={menu}
           aria-haspopup="dialog"
@@ -4312,8 +4325,15 @@ function App() {
       {menu && (
         <Dialog title="Workspaces & settings" onClose={() => setMenu(false)}>
           <div className="more-menu-content">
+            <label className="workspace-finder">
+              <span className="sr-only">Find a workspace</span>
+              <Mark name="search" />
+              <input type="search" placeholder="Find a workspace" value={workspaceQuery}
+                onChange={(event) => setWorkspaceQuery(event.target.value)} />
+            </label>
             {NAV_GROUPS.map((group) => {
-              const groupPages = group.pages.filter((p) => visible.includes(p));
+              const groupPages = group.pages.filter((p) => visible.includes(p) &&
+                p.toLowerCase().includes(workspaceQuery.trim().toLowerCase()));
               if (!groupPages.length) return null;
               return (
                 <div key={group.title} className="more-group">
@@ -4337,16 +4357,10 @@ function App() {
                           <strong>{p}</strong>
                           <small>{descriptions[p] || "Open workspace"}</small>
                         </div>
-                        {p === "Evidence" &&
-                          stones.some((s) => s.evidence !== "Approved") && (
-                            <span className="badge-count">
-                              {
-                                stones.filter(
-                                  (s) => s.evidence !== "Approved",
-                                ).length
-                              }
-                            </span>
-                          )}
+                        {p === "Evidence" && navCounts[p] > 0 && (
+                          <span className="badge-count">{navCounts[p]}</span>
+                        )}
+                        <span className="more-item-trailing"><Mark name="chevron" /></span>
                       </button>
                     ))}
                   </div>
@@ -4354,6 +4368,9 @@ function App() {
               );
             })}
 
+            {!visible.some((p) => p.toLowerCase().includes(workspaceQuery.trim().toLowerCase())) && (
+              <p className="workspace-no-match muted" role="status">No matching workspaces.</p>
+            )}
             <div className="more-account-card">
               <div className="more-account-header">
                 <div className="user-avatar">
@@ -4369,7 +4386,7 @@ function App() {
               <div className="more-account-actions">
                 <button
                   type="button"
-                  className="secondary wide"
+                  className="secondary"
                   onClick={() => setTheme(theme === "light" ? "dark" : "light")}
                 >
                   <Mark name={theme === "light" ? "moon" : "sun"} />
@@ -4377,7 +4394,7 @@ function App() {
                 </button>
                 <button
                   type="button"
-                  className="text-button danger wide"
+                  className="text-button danger"
                   onClick={() =>
                     run(async () => {
                       await request("/api/logout", {});
@@ -4400,6 +4417,7 @@ function App() {
 
       {filterSheetOpen && (
         <Dialog
+          className="inventory-filter-dialog"
           title="Filters & sort"
           onClose={() => setFilterSheetOpen(false)}
         >

@@ -2159,26 +2159,6 @@ footer {
   inset-block: 2px;
   min-height: 44px;
 }
-.auth-fields select {
-  appearance: none;
-  padding-inline-end: 29px;
-  text-overflow: ellipsis;
-}
-.auth-fields label:has(> select) {
-  position: relative;
-}
-.auth-fields label:has(> select)::after {
-  position: absolute;
-  inset-inline-end: 13px;
-  bottom: 21px;
-  width: 6px;
-  height: 6px;
-  border: solid var(--muted);
-  border-width: 0 1.5px 1.5px 0;
-  transform: rotate(45deg);
-  pointer-events: none;
-  content: "";
-}
 .auth-currency {
   display: grid;
   grid-template-columns: minmax(0, 1.45fr) minmax(0, 1fr);
