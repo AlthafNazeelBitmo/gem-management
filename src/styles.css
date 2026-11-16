@@ -8,19 +8,24 @@
   --surface: #ffffff;
   --sidebar: #ffffff;
   --ink: #1e293b;
-  --muted: #64748b;
+  --muted: #5b6b82;
   --line: #eaedf2;
   --accent: #5b4df2;
+  --accent-text: #5141dc;
   --accent-hover: #4d3ee0;
   --accent-light: #ede9fe;
   --hover: #f1f5f9;
-  --danger: #ef4444;
+  --danger: #b91c1c;
   --good: #10b981;
   --warn: #f59e0b;
   --input: #ffffff;
   --radius-sm: 6px;
   --radius: 8px;
   --radius-lg: 12px;
+  --safe-top: env(safe-area-inset-top, 0px);
+  --safe-right: env(safe-area-inset-right, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+  --safe-left: env(safe-area-inset-left, 0px);
   color-scheme: light;
 }
 :root[data-theme="dark"] {
@@ -30,7 +35,8 @@
   --ink: #f8fafc;
   --muted: #94a3b8;
   --line: #334155;
-  --accent: #6366f1;
+  --accent: #5c58e8;
+  --accent-text: #c2bcff;
   --accent-hover: #4f46e5;
   --accent-light: #2e2866;
   --hover: #26334d;
@@ -121,9 +127,6 @@ button,
   user-select: none;
   -webkit-touch-callout: none;
 }
-.sheet-grab-handle {
-  display: none;
-}
 .mobile-tab-bar {
   display: none;
 }
@@ -196,7 +199,7 @@ button,
 }
 :root[data-theme="dark"] .category-pill.active {
   background: var(--accent);
-  border-color: var(--accent);
+  border-color: var(--accent-text);
   color: #ffffff;
 }
 .pill-count {
@@ -213,8 +216,8 @@ button,
 }
 .filter-toggle-pill.active-filter {
   border-style: solid;
-  border-color: var(--accent);
-  color: var(--accent);
+  border-color: var(--accent-text);
+  color: var(--accent-text);
   font-weight: 600;
 }
 .mobile-inventory-subbar {
@@ -267,34 +270,37 @@ button,
 .more-group-grid {
   display: grid;
   grid-template-columns: 1fr;
-  gap: 6px;
+  gap: 0;
+  border: 1px solid var(--line);
+  border-radius: 12px;
 }
 .more-item-card {
   display: flex;
   align-items: center;
   gap: 14px;
   padding: 12px 14px;
-  border-radius: 12px;
-  background: color-mix(in srgb, var(--page) 50%, var(--surface));
-  border: 1px solid var(--line);
+  border-radius: 0;
+  background: transparent;
+  border: 0;
+  border-bottom: 1px solid var(--line);
   text-align: left;
   min-height: 52px;
   cursor: pointer;
   color: var(--ink);
 }
+.more-item-card:first-child { border-radius: 11px 11px 0 0; }
+.more-item-card:last-child { border-bottom: 0; border-end-start-radius: 11px; border-end-end-radius: 11px; }
 .more-item-card.active {
   background: color-mix(in srgb, var(--accent) 10%, var(--surface));
-  border-color: var(--accent);
 }
 .more-item-icon {
   width: 34px;
   height: 34px;
   border-radius: 8px;
-  background: var(--surface);
-  border: 1px solid var(--line);
+  background: var(--accent-light);
   display: grid;
   place-items: center;
-  color: var(--accent);
+  color: var(--accent-text);
   flex-shrink: 0;
 }
 .more-item-info {
@@ -310,9 +316,7 @@ button,
   display: block;
   font-size: 12px;
   color: var(--muted);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  overflow-wrap: anywhere;
 }
 .more-account-card {
   margin-top: 8px;
@@ -354,7 +358,7 @@ summary:focus-visible,
   outline-offset: 3px;
 }
 a {
-  color: var(--accent);
+  color: var(--accent-text);
   text-underline-offset: 3px;
 }
 a:hover {
@@ -503,7 +507,7 @@ strong {
   color: var(--muted);
   cursor: pointer;
   text-align: left;
-  transition: all 0.15s ease;
+  transition: background-color 150ms ease, border-color 150ms ease, opacity 100ms ease;
   user-select: none;
 }
 @media (hover: hover) and (pointer: fine) {
@@ -556,7 +560,7 @@ strong {
   min-height: 38px;
   font-size: 13.5px;
   font-weight: 500;
-  transition: all 0.15s ease;
+  transition: opacity 100ms ease;
 }
 @media (hover: hover) and (pointer: fine) {
   .sidebar nav button:hover {
@@ -574,8 +578,8 @@ strong {
   color: #ffffff;
 }
 .sidebar nav button.active .nav-count {
-  background: rgba(255, 255, 255, 0.25);
-  color: #ffffff;
+  background: var(--surface);
+  color: var(--accent-text);
 }
 .nav-count {
   margin-left: auto;
@@ -584,7 +588,7 @@ strong {
   padding: 2px 8px;
   border-radius: 9999px;
   background: var(--accent-light);
-  color: var(--accent);
+  color: var(--accent-text);
 }
 .account {
   flex-shrink: 0;
@@ -647,14 +651,14 @@ main {
   max-width: 100%;
   color: var(--muted);
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
-  transition: all 0.15s ease;
+  transition: background-color 150ms ease, border-color 150ms ease, opacity 100ms ease;
 }
 :root[data-theme="dark"] .global-search-container {
   background: #1e293b;
   border-color: #475569;
 }
 .global-search-container:focus-within {
-  border-color: var(--accent);
+  border-color: var(--accent-text);
   box-shadow: 0 0 0 1px var(--accent);
   background: var(--surface);
 }
@@ -708,12 +712,12 @@ main {
   border-radius: var(--radius-sm);
   border: 1px solid var(--line);
   background: var(--surface);
-  color: #334155;
+  color: var(--ink);
   display: flex;
   align-items: center;
   justify-content: center;
   position: relative;
-  transition: all 0.15s ease;
+  transition: opacity 100ms ease;
   padding: 0;
 }
 @media (hover: hover) and (pointer: fine) {
@@ -748,13 +752,14 @@ main {
   font: inherit;
   color: var(--ink);
   text-align: left;
+  transition: opacity 100ms ease;
 }
 .user-avatar {
   width: 30px;
   height: 30px;
   border-radius: var(--radius-sm);
   background: var(--accent-light);
-  color: var(--accent);
+  color: var(--accent-text);
   font-weight: 700;
   font-size: 12px;
   display: flex;
@@ -820,7 +825,7 @@ main {
   border-radius: var(--radius);
   font-weight: 600;
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08);
-  transition: all 0.15s ease;
+  transition: background-color 150ms ease, border-color 150ms ease, opacity 100ms ease;
 }
 :root[data-theme="dark"] .primary {
   color: #ffffff;
@@ -849,7 +854,7 @@ main {
 .text-button {
   border: 0;
   background: transparent;
-  color: var(--accent);
+  color: var(--accent-text);
   padding: 8px;
   font-size: 13px;
   min-height: 36px;
@@ -955,11 +960,11 @@ main {
   align-items: center;
   justify-content: center;
   padding: 0;
-  transition: all 0.15s ease;
+  transition: background-color 150ms ease, border-color 150ms ease, opacity 100ms ease;
 }
 .view-toggle-btn.active {
   background: var(--surface);
-  color: var(--accent);
+  color: var(--accent-text);
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08);
 }
 .view-toggle-btn:focus-visible {
@@ -977,11 +982,11 @@ main {
   height: 40px;
   flex: 1;
   max-width: 380px;
-  transition: all 0.15s ease;
+  transition: background-color 150ms ease, border-color 150ms ease, opacity 100ms ease;
 }
 .card-search-box:focus-within {
   background: var(--surface);
-  border-color: var(--accent);
+  border-color: var(--accent-text);
   box-shadow: 0 0 0 1px var(--accent);
 }
 .card-search-box input {
@@ -1009,10 +1014,10 @@ main {
   color: var(--ink);
   cursor: pointer;
   outline: none;
-  transition: all 0.15s ease;
+  transition: opacity 100ms ease;
 }
 .select-pill:focus-visible {
-  border-color: var(--accent);
+  border-color: var(--accent-text);
   outline: 2px solid var(--accent);
   outline-offset: 1px;
 }
@@ -1028,7 +1033,7 @@ main {
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  transition: all 0.15s ease;
+  transition: background-color 150ms ease, border-color 150ms ease, opacity 100ms ease;
 }
 @media (hover: hover) and (pointer: fine) {
   .filter-btn-outline:hover {
@@ -1077,7 +1082,7 @@ main {
   transition: border-color 0.15s ease;
 }
 .filter-select:focus-visible {
-  border-color: var(--accent);
+  border-color: var(--accent-text);
   outline: 2px solid var(--accent);
   outline-offset: 1px;
 }
@@ -1086,11 +1091,21 @@ main {
   height: 38px;
   display: inline-flex;
   align-items: center;
-  color: var(--accent);
+  color: var(--accent-text);
   white-space: nowrap;
 }
 
 /* Table Architecture */
+.record-field-label,
+.stone-disclosure {
+  display: none;
+}
+.record-link.stone-cell {
+  display: flex;
+}
+.record-link .stone-meta {
+  min-width: 0;
+}
 .table-scroll {
   max-width: 100%;
   overflow-x: auto;
@@ -1211,7 +1226,7 @@ tr:last-child td {
 @media (hover: hover) and (pointer: fine) {
   .record-link:hover strong,
   .record-link:hover {
-    color: var(--accent);
+    color: var(--accent-text);
   }
 }
 
@@ -1248,7 +1263,7 @@ tr:last-child td {
 }
 .status-text.status-memo,
 .badge.info {
-  color: #3b82f6; /* calm royal blue text only */
+  color: #1d62c5;
   font-weight: 500;
 }
 .status-text.status-warn,
@@ -1262,7 +1277,7 @@ tr:last-child td {
   font-weight: 600;
 }
 .status-text.status-processing {
-  color: #6366f1;
+  color: var(--accent-text);
   font-weight: 500;
 }
 
@@ -1310,7 +1325,7 @@ tr:last-child td {
   gap: 5px;
   cursor: pointer;
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.03);
-  transition: all 0.15s ease;
+  transition: background-color 150ms ease, border-color 150ms ease, opacity 100ms ease;
 }
 :root[data-theme="dark"] .table-action-btn,
 :root[data-theme="dark"] .action-btn-primary {
@@ -1352,7 +1367,7 @@ tr:last-child td {
   align-items: center;
   justify-content: center;
   cursor: pointer;
-  transition: all 0.15s ease;
+  transition: background-color 150ms ease, border-color 150ms ease, opacity 100ms ease;
 }
 .action-btn-secondary:focus-visible {
   outline: 2px solid var(--accent);
@@ -1384,7 +1399,7 @@ tr:last-child td {
   }
 }
 .stone-card.selected {
-  border-color: var(--accent);
+  border-color: var(--accent-text);
   background: color-mix(in srgb, var(--accent) 3%, var(--surface));
 }
 .stone-card-header {
@@ -1403,7 +1418,7 @@ tr:last-child td {
   width: 16px;
   height: 16px;
   cursor: pointer;
-  accent-color: var(--accent);
+  accent-color: var(--accent-text);
 }
 .stone-card-visual {
   display: flex;
@@ -1530,7 +1545,7 @@ tr:last-child td {
   justify-content: center;
   padding: 0 8px;
   cursor: pointer;
-  transition: all 0.15s ease;
+  transition: background-color 150ms ease, border-color 150ms ease, opacity 100ms ease;
 }
 @media (hover: hover) and (pointer: fine) {
   .page-btn:hover:not(:disabled) {
@@ -1541,7 +1556,7 @@ tr:last-child td {
 .page-btn.active {
   background: var(--accent);
   color: #ffffff;
-  border-color: var(--accent);
+  border-color: var(--accent-text);
   font-weight: 600;
 }
 .page-btn:disabled {
@@ -1652,7 +1667,7 @@ tr:last-child td {
   text-align: left;
   gap: 12px;
   border-radius: 8px;
-  transition: all 0.15s ease;
+  transition: background-color 150ms ease, border-color 150ms ease, opacity 100ms ease;
 }
 .work-list > button:last-child {
   border-bottom: 0;
@@ -1803,7 +1818,7 @@ input[type="checkbox"] {
   width: 17px;
   min-height: 17px;
   height: 17px;
-  accent-color: var(--accent);
+  accent-color: var(--accent-text);
   flex-shrink: 0;
 }
 .check-label {
@@ -1945,7 +1960,7 @@ dialog::backdrop {
 }
 .printable-link {
   font-size: 13px;
-  color: var(--accent);
+  color: var(--accent-text);
   font-weight: 500;
   display: inline-flex;
   align-items: center;
@@ -1990,8 +2005,39 @@ dialog::backdrop {
 .export-list > div span {
   flex: 1;
 }
+.evidence-file {
+  padding: 12px 0;
+  border-top: 1px solid var(--line);
+  overflow-wrap: anywhere;
+}
+.extraction-action {
+  margin-top: 10px;
+}
+.extraction-action > p {
+  margin-bottom: 8px;
+}
 .assistant-workspace {
   max-width: 760px;
+}
+.assistant-composer {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  padding: 16px;
+}
+.assistant-controls {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px 14px;
+}
+.assistant-answer h3 {
+  font-size: 16px;
+  margin-bottom: 4px;
+}
+.assistant-answer {
+  overflow-wrap: anywhere;
 }
 .assistant-workspace > p {
   color: var(--muted);
@@ -2033,7 +2079,7 @@ dialog::backdrop {
   border-radius: 7px;
 }
 .step-nav button[aria-current] {
-  color: var(--accent);
+  color: var(--accent-text);
   background: var(--hover);
 }
 .step-nav span {
@@ -2072,7 +2118,7 @@ details {
 }
 summary {
   cursor: pointer;
-  color: var(--accent);
+  color: var(--accent-text);
 }
 pre {
   font-size: 11px;
@@ -2104,7 +2150,7 @@ footer {
 .auth-story > svg {
   width: 36px;
   height: 36px;
-  color: var(--accent);
+  color: var(--accent-text);
   margin-bottom: 56px;
 }
 .auth-story h1 {
@@ -2196,8 +2242,14 @@ footer {
 /* ==========================================================================
    APPLE-GRADE MOBILE RESPONSIVE ARCHITECTURE (<= 760px)
    ========================================================================== */
-@media (max-width: 760px) {
-  /* 1. App Shell & Responsive Visibility */
+@media screen and (max-width: 760px), screen and (max-width: 920px) and (pointer: coarse) {
+  :root {
+    --mobile-gutter: clamp(14px, 4vw, 24px);
+    --mobile-toolbar-height: 54px;
+    --mobile-tabs-height: 56px;
+    --mobile-tab-room: calc(var(--mobile-tabs-height) + max(8px, var(--safe-bottom)) + 8px);
+    scroll-padding-block: calc(var(--mobile-toolbar-height) + var(--safe-top) + 12px) calc(var(--mobile-tab-room) + 12px);
+  }
   .desktop-only {
     display: none !important;
   }
@@ -2214,105 +2266,94 @@ footer {
     background: var(--page);
   }
   .page-content {
-    padding: 14px 14px calc(84px + env(safe-area-inset-bottom, 16px));
+    padding: 12px max(var(--mobile-gutter), var(--safe-right))
+      calc(var(--mobile-tab-room) + 16px)
+      max(var(--mobile-gutter), var(--safe-left));
   }
-  input,
-  select,
-  textarea {
-    font-size: 16px !important;
-  }
-
-  /* 2. Apple Frosted Glass Navigation Bar (Top) */
   .toolbar {
-    height: 56px;
-    min-height: 56px;
-    padding: max(8px, env(safe-area-inset-top, 0px)) 14px 8px;
-    background: color-mix(in srgb, var(--surface) 88%, transparent);
-    backdrop-filter: blur(24px) saturate(180%);
-    -webkit-backdrop-filter: blur(24px) saturate(180%);
-    border-bottom: 1px solid var(--line);
-    position: sticky;
-    top: 0;
-    z-index: 40;
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
+    height: auto;
+    min-height: calc(var(--mobile-toolbar-height) + var(--safe-top));
+    padding: var(--safe-top) max(var(--mobile-gutter), var(--safe-right)) 0
+      max(var(--mobile-gutter), var(--safe-left));
+    background: color-mix(in srgb, var(--surface) 94%, transparent);
+    backdrop-filter: blur(14px);
+    -webkit-backdrop-filter: blur(14px);
+    gap: 8px;
+  }
+  .toolbar-end {
+    margin-inline-end: -4px;
+    gap: 2px;
+    flex-shrink: 0;
   }
   .mobile-toolbar-brand {
     display: flex;
     align-items: center;
-    gap: 10px;
+    gap: 7px;
+    min-width: 0;
   }
   .mobile-toolbar-brand svg {
-    width: 24px;
-    height: 24px;
+    width: 21px;
+    height: 21px;
     flex-shrink: 0;
   }
   .mobile-toolbar-title {
-    font-size: 18px;
-    font-weight: 700;
-    letter-spacing: -0.3px;
+    font-size: 15px;
+    font-weight: 650;
+    letter-spacing: -0.25px;
     color: var(--ink);
-  }
-  .mobile-toolbar-actions {
-    display: flex;
-    align-items: center;
-    gap: 8px;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+    overflow: hidden;
   }
   .mobile-search-active-bar {
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: 6px;
     width: 100%;
-    animation: fadeInSearchBar 0.18s ease-out;
+    min-height: var(--mobile-toolbar-height);
   }
-  @keyframes fadeInSearchBar {
-    from { opacity: 0; transform: translateY(-4px); }
-    to { opacity: 1; transform: translateY(0); }
+  .mobile-search-active-bar > svg {
+    display: none;
   }
   .mobile-search-input {
     flex: 1;
-    min-height: 40px;
+    min-width: 0;
     border-radius: 10px;
     padding: 0 12px;
-    font-size: 15px;
-    border: 1px solid var(--line);
-    background: var(--surface);
+    background: var(--page);
+  }
+  .mobile-search-input::-webkit-search-cancel-button {
+    display: none;
+  }
+  .mobile-search-active-bar .search-clear-btn {
+    width: 44px;
   }
   .mobile-search-done-btn {
-    font-size: 14px;
-    font-weight: 600;
-    color: var(--accent);
-    padding: 0 8px;
-    min-height: 40px;
+    padding-inline: 8px;
   }
-  .icon-utility-btn {
+  .icon-utility-btn,
+  .user-profile-pill {
+    display: grid;
+    place-items: center;
     width: 44px;
     height: 44px;
     min-width: 44px;
     min-height: 44px;
-    border-radius: 10px;
-    padding: 0;
-  }
-  .icon-utility-btn svg {
-    width: 19px;
-    height: 19px;
-  }
-  .user-profile-pill {
+    color: var(--ink);
     background: transparent;
     border: 0;
     padding: 0;
-    box-shadow: none;
-    cursor: pointer;
+  }
+  .icon-utility-btn svg {
+    width: 21px;
+    height: 21px;
   }
   .user-profile-pill .user-avatar {
-    width: 34px;
-    height: 34px;
-    font-size: 12px;
-    font-weight: 700;
-    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+    width: 30px;
+    height: 30px;
+    border-radius: 50%;
+    font-size: 11px;
   }
-
   /* 3. Mobile Touch Inventory Controls */
   .mobile-inventory-header {
     display: flex;
@@ -2321,55 +2362,50 @@ footer {
     margin-bottom: 14px;
   }
 
-  /* 4. Apple iOS Bottom Tab Bar */
   .mobile-tab-bar {
+    --tab-edge: 10px;
     display: flex;
     position: fixed;
-    bottom: 0;
-    left: 0;
-    right: 0;
+    inset: auto max(var(--tab-edge), var(--safe-right))
+      max(8px, var(--safe-bottom)) max(var(--tab-edge), var(--safe-left));
+    max-width: 520px;
+    margin-inline: auto;
     z-index: 45;
-    height: calc(56px + env(safe-area-inset-bottom, 12px));
-    padding-bottom: env(safe-area-inset-bottom, 12px);
-    background: color-mix(in srgb, var(--surface) 86%, transparent);
-    backdrop-filter: blur(24px) saturate(180%);
-    -webkit-backdrop-filter: blur(24px) saturate(180%);
-    border-top: 1px solid var(--line);
-    box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.04);
-    align-items: center;
-    justify-content: space-around;
+    min-height: var(--mobile-tabs-height);
+    padding: 3px;
+    gap: 2px;
+    background: color-mix(in srgb, var(--surface) 95%, transparent);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    border: 1px solid var(--line);
+    border-radius: 22px;
+    box-shadow: 0 4px 20px #10182822;
   }
-  .mobile-tab-btn {
+  .mobile-tab-bar .mobile-tab-btn {
     display: flex;
     flex-direction: column;
     align-items: center;
     justify-content: center;
     gap: 3px;
-    background: transparent;
-    border: 0;
-    color: var(--muted);
-    font-size: 10.5px;
-    font-weight: 500;
-    letter-spacing: -0.01em;
     flex: 1;
-    height: 100%;
+    min-width: 0;
     min-height: 48px;
-    padding: 4px 0 2px;
-    position: relative;
-    cursor: pointer;
+    padding: 4px 2px;
+    border: 0;
+    border-radius: 18px;
+    background: transparent;
+    color: var(--muted);
+    font-size: clamp(10px, 2.8vw, 12px);
+    font-weight: 550;
   }
   .mobile-tab-btn svg {
     width: 21px;
     height: 21px;
-    stroke-width: 2;
-    transition: stroke-width 0.15s ease, transform 0.15s ease;
   }
-  .mobile-tab-btn.active {
-    color: var(--accent);
-    font-weight: 600;
-  }
-  .mobile-tab-btn.active svg {
-    stroke-width: 2.3;
+  .mobile-tab-bar .mobile-tab-btn.active {
+    color: var(--accent-text);
+    background: var(--accent-light);
+    font-weight: 650;
   }
   .tab-icon-wrap {
     position: relative;
@@ -2388,285 +2424,342 @@ footer {
     border: 1.5px solid var(--surface);
   }
 
-  /* 5. Apple Native Bottom-Sheet Dialogs */
   dialog {
-    position: fixed !important;
-    inset: auto 0 0 0 !important;
-    width: 100% !important;
-    max-width: 100% !important;
-    max-height: 88dvh !important;
-    margin: 0 !important;
-    border-radius: 20px 20px 0 0 !important;
-    border-inline: 0 !important;
-    border-bottom: 0 !important;
-    border-top: 1px solid var(--line) !important;
-    padding: 0 18px max(24px, calc(env(safe-area-inset-bottom, 16px) + 20px)) !important;
-    box-shadow: 0 -12px 48px rgba(0, 0, 0, 0.28) !important;
-    overflow-y: auto !important;
-    -webkit-overflow-scrolling: touch;
+    position: fixed;
+    inset: auto 0 0;
+    width: min(100%, 600px);
+    max-width: 100%;
+    max-height: min(88dvh, calc(100dvh - var(--safe-top) - 12px));
+    margin: 0 auto;
+    border-radius: 22px 22px 0 0;
+    padding: 0 max(18px, var(--safe-right)) calc(16px + var(--safe-bottom))
+      max(18px, var(--safe-left));
+    overflow-y: auto;
     overscroll-behavior: contain;
-    animation: slideUpSheet 0.28s cubic-bezier(0.16, 1, 0.3, 1) !important;
+    scroll-padding-block: 64px 12px;
+    animation: sheet-enter 220ms cubic-bezier(0.2, 0.75, 0.25, 1);
   }
-  @keyframes slideUpSheet {
-    from { transform: translateY(100%); }
-    to { transform: translateY(0); }
+  html:has(dialog[open]) {
+    overflow: hidden;
   }
-  .sheet-grab-handle {
-    display: block;
-    width: 36px;
-    height: 5px;
-    border-radius: 3px;
-    background: color-mix(in srgb, var(--ink) 25%, transparent);
-    margin: 10px auto 6px;
-    flex-shrink: 0;
+  @keyframes sheet-enter {
+    from { transform: translateY(26px); opacity: 0; }
+    to { transform: translateY(0); opacity: 1; }
   }
   .dialog-head {
-    position: sticky;
-    top: 0;
-    z-index: 20;
-    margin: 0 -18px 14px;
-    padding: 12px 18px;
-    background: var(--surface);
-    border-bottom: 1px solid var(--line);
+    margin: 0 calc(-1 * max(18px, var(--safe-right))) 14px
+      calc(-1 * max(18px, var(--safe-left)));
+    padding: 9px max(18px, var(--safe-right)) 9px max(18px, var(--safe-left));
+    gap: 8px;
   }
   .dialog-head h2 {
-    font-size: 18px;
+    min-width: 0;
+    overflow-wrap: anywhere;
+    font-size: 19px;
+  }
+  .dialog-head .icon-button {
+    width: 44px;
+    min-width: 44px;
   }
   .dialog-actions {
-    position: sticky;
-    bottom: 0;
-    background: var(--surface);
-    padding: 14px 0 max(8px, env(safe-area-inset-bottom, 8px));
-    border-top: 1px solid var(--line);
-    z-index: 10;
-    gap: 10px;
+    margin-top: 16px;
+    padding-top: 12px;
+    gap: 8px;
+    flex-wrap: wrap;
   }
   .dialog-actions button {
-    flex: 1;
-    min-height: 44px;
+    flex: 1 1 auto;
   }
 
-  /* 6. Floating Selection Action Island Pill */
   .selection-bar {
-    position: fixed;
-    bottom: calc(64px + env(safe-area-inset-bottom, 12px));
-    left: 12px;
-    right: 12px;
-    z-index: 44;
-    margin-bottom: 0;
-    border-radius: 14px;
-    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.16);
-    backdrop-filter: blur(20px);
-    -webkit-backdrop-filter: blur(20px);
-    background: color-mix(in srgb, var(--surface) 92%, var(--accent));
-    border: 1px solid color-mix(in srgb, var(--accent) 30%, var(--line));
-    padding: 10px 14px;
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    justify-content: space-between;
-    gap: 8px;
-    animation: floatUpPill 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+    margin: 0;
+    padding: 12px;
+    border-radius: 0;
+    border: 0;
+    border-bottom: 1px solid var(--line);
+    box-shadow: none;
   }
   .selection-bar button {
     flex: 1 1 auto;
-    font-size: 12.5px;
-    min-height: 38px;
-    padding: 6px 12px;
   }
-  @keyframes floatUpPill {
-    from { transform: translateY(20px); opacity: 0; }
-    to { transform: translateY(0); opacity: 1; }
-  }
-
-  /* 7. Page Headings & Lead Section */
   .page-heading {
     align-items: flex-start;
     flex-direction: column;
-    margin: 12px 0 18px;
+    margin: 12px 0 22px;
     gap: 14px;
   }
   .page-heading h1 {
-    font-size: clamp(24px, 7vw, 30px);
-    letter-spacing: -0.8px;
+    font-size: clamp(30px, 8vw, 38px);
+    letter-spacing: -0.035em;
+    margin-bottom: 6px;
+    overflow-wrap: anywhere;
   }
   .page-heading p {
-    font-size: 13.5px;
+    font-size: 14px;
+    line-height: 1.5;
   }
-  .page-heading .actions {
-    width: 100%;
-    display: flex;
-    flex-wrap: wrap;
-    gap: 8px;
+  .page-heading .actions:empty {
+    display: none;
   }
   .page-heading .actions button {
-    flex: 1 1 auto;
-    min-height: 44px;
     justify-content: center;
   }
-
+  .overview-lead,
+  .work-list {
+    padding: 16px;
+    border-radius: 16px;
+    margin-bottom: 16px;
+  }
   .overview-lead {
-    grid-template-columns: 1fr;
-    gap: 18px;
-    padding-bottom: 22px;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 0;
   }
   .stock-number {
-    font-size: clamp(44px, 14vw, 64px);
+    margin-block: 4px;
+    font-size: 48px;
   }
   .stock-number span {
     display: inline;
-    font-size: 13.5px;
-    margin-left: 10px;
+    font-size: 14px;
+    margin-left: 9px;
+  }
+  .overview-lead p {
+    line-height: 1.45;
+    margin-bottom: 0;
+  }
+  .custody-disclosure.mobile-only {
+    display: block !important;
+    border-top: 1px solid var(--line);
+    margin-top: 12px;
+  }
+  .custody-disclosure summary {
+    padding-block: 12px;
+    min-height: 44px;
+    font-weight: 600;
+    cursor: pointer;
   }
   .status-summary {
-    display: grid;
-    grid-template-columns: repeat(2, 1fr);
-    gap: 8px 12px;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 6px;
   }
   .status-summary div {
-    padding: 10px 12px;
-    background: color-mix(in srgb, var(--page) 60%, var(--surface));
-    border: 1px solid var(--line);
-    border-radius: 9px;
+    padding: 7px 9px;
+    gap: 4px;
   }
   .status-summary div span {
     font-size: 12px;
   }
   .status-summary div strong {
-    font-size: 18px;
+    font-size: 15px;
+  }
+  .recent-stock {
+    margin-bottom: 16px;
+  }
+  .recent-stock .section-heading {
+    padding-block: 6px 0;
+  }
+  .recent-stock .text-button {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
   }
   .work-list button {
-    padding: 12px 14px;
-    border-radius: 10px;
-    min-height: 48px;
+    padding: 10px 0;
+    border-radius: 0;
+    min-height: 52px;
+    overflow-wrap: anywhere;
+  }
+  .work-list button > span:first-child {
+    min-width: 0;
+  }
+  .panel > h2,
+  .panel .section-heading {
+    padding-inline: 14px;
+  }
+  .section-heading {
+    gap: 8px 12px;
+    flex-wrap: wrap;
   }
 
-  /* 8. Inventory Toolbar & Domain Filter Bar */
-  .card-action-bar {
-    padding: 12px 14px;
-    gap: 10px;
+  .view-toggle-group {
+    border-radius: 12px;
   }
-  .card-actions-left {
-    min-width: 0;
-    width: 100%;
-    flex-wrap: wrap;
-    gap: 8px;
+  .view-toggle-btn {
+    width: auto;
+    gap: 5px;
+    padding-inline: 10px;
+    font-size: 13px;
   }
-  .card-actions-right {
-    width: 100%;
-    display: flex;
+  .view-toggle-btn svg {
+    width: 15px;
+    height: 15px;
+  }
+  .filter-toggle-pill {
+    border-style: solid;
+  }
+  .filter-toggle-pill.active-filter {
+    color: var(--accent-text);
+  }
+  .stock-search-summary {
+    align-items: center;
     justify-content: space-between;
     gap: 8px;
+    margin-bottom: 8px;
+    overflow-wrap: anywhere;
   }
-  .card-actions-right .select-pill {
-    flex: 1;
-    min-height: 42px;
-  }
-  .card-actions-right .primary {
-    flex: 1;
-    min-height: 42px;
-    justify-content: center;
-  }
-  .card-search-box {
-    flex: 1;
+  .stock-search-summary > span {
     min-width: 0;
-    max-width: none;
-    height: 42px;
-  }
-  .inventory-filters-bar {
-    padding: 12px 14px;
-    gap: 8px;
-  }
-  .filter-group {
-    min-width: 130px;
-    flex: 1 1 calc(50% - 6px);
-  }
-  .filter-select {
-    height: 42px;
   }
 
   /* 9. Gemstone Grid Mode & Table Horizontal Pan */
   .stone-grid {
-    grid-template-columns: 1fr;
-    padding: 12px 6px;
-    gap: 14px;
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 250px), 1fr));
+    gap: 10px;
+    padding: 10px;
   }
   .stone-card {
-    padding: 16px;
-    border-radius: 16px;
-    background: var(--surface);
-    border: 1px solid var(--line);
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.03);
-    cursor: pointer;
+    padding: 12px;
+    border-radius: 13px;
+    gap: 8px;
   }
-  .stone-card:active {
-    opacity: 0.75;
+  .stone-card-visual {
+    display: none;
   }
   .stone-card-title {
     font-size: 17px;
-    font-weight: 700;
-    margin: 4px 0 2px;
+    overflow-wrap: anywhere;
   }
   .stone-card-view-btn {
     min-height: 44px;
     width: 100%;
-    font-size: 14px;
-    font-weight: 600;
-    justify-content: center;
-    border-radius: 10px;
   }
 
-  .table-scroll {
-    border: 1px solid var(--line);
-    border-radius: 10px;
-    -webkit-overflow-scrolling: touch;
-    overscroll-behavior-x: contain;
+  .records-table {
+    overflow: visible;
     background: var(--surface);
   }
-  .panel .table-scroll {
-    border: 0;
-    border-radius: 0;
+  .records-table table,
+  .records-table tbody {
+    display: block;
+    width: 100%;
   }
-  th,
-  td {
+  .records-table thead {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+  }
+  .records-table tbody > tr {
+    position: relative;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    align-items: start;
+    gap: 9px 12px;
     padding: 12px 14px;
-    min-width: 110px;
+    border-bottom: 1px solid var(--line);
   }
-  .col-select {
-    width: 44px !important;
-    min-width: 44px !important;
-    max-width: 44px !important;
-    padding: 10px 4px !important;
+  .records-table tbody > tr:last-child {
+    border-bottom: 0;
   }
-  /* Sticky First Column for Gemstone Specifications */
-  .table-scroll th:first-child,
-  .table-scroll td:first-child {
-    position: sticky;
-    left: 0;
-    background: var(--surface);
-    z-index: 2;
-    box-shadow: 2px 0 4px rgba(0, 0, 0, 0.04);
+  .records-table td {
+    display: block;
+    max-width: none;
+    min-width: 0;
+    padding: 0;
+    border: 0;
+    font-size: 14px;
+    line-height: 1.4;
   }
-  .table-scroll th:first-child {
-    z-index: 3;
-    background: color-mix(in srgb, var(--page) 60%, var(--surface));
+  .record-field-label {
+    display: block;
+    color: var(--muted);
+    font-size: 12px;
+    margin-bottom: 2px;
   }
-  /* When first column is checkbox, also make adjacent stone cell sticky */
-  .table-scroll th.col-select + th,
-  .table-scroll td.col-select + td {
-    position: sticky;
-    left: 44px;
-    background: var(--surface);
-    z-index: 2;
-    box-shadow: 2px 0 4px rgba(0, 0, 0, 0.04);
+  .record-field-value {
+    min-width: 0;
+    overflow-wrap: anywhere;
   }
-  .table-scroll th.col-select + th {
-    z-index: 3;
-    background: color-mix(in srgb, var(--page) 60%, var(--surface));
+  .record-field-value .numeric {
+    white-space: normal;
   }
-  .table-scroll tr:hover td:first-child,
-  .table-scroll tr:hover td.col-select + td {
-    background: var(--hover);
+  .records-table td[data-mobile="identity"],
+  .records-table td[data-mobile="full"],
+  .records-table td:has(.record-actions),
+  .records-table td:has(details) {
+    grid-column: 1 / -1;
+  }
+  .records-table [data-mobile="omit"] {
+    display: none;
+  }
+  .records-table td[data-mobile="identity"] .record-field-label {
+    display: none;
+  }
+  .records-table .col-select {
+    position: absolute;
+    inset: 12px auto auto 8px;
+    padding: 0;
+  }
+  .records-table .col-select input[type="checkbox"] {
+    width: 44px;
+    height: 44px;
+    appearance: none;
+    border: 0;
+    background: transparent;
+    position: relative;
+  }
+  .records-table .col-select input[type="checkbox"]::before {
+    content: "";
+    position: absolute;
+    inset: 12px;
+    border: 1px solid var(--muted);
+    border-radius: 6px;
+  }
+  .records-table .col-select input:checked::before {
+    background: var(--accent);
+    border-color: var(--accent-text);
+  }
+  .records-table .col-select input:checked::after {
+    content: "";
+    position: absolute;
+    top: 15px;
+    left: 19px;
+    width: 5px;
+    height: 9px;
+    border: solid white;
+    border-width: 0 2px 2px 0;
+    transform: rotate(45deg);
+  }
+  .records-stock tr:has(.col-select) td[data-mobile="identity"] {
+    padding-left: 40px;
+  }
+  .records-stock-preview tbody > tr {
+    grid-template-columns: .8fr 1fr 1fr;
+  }
+  .record-link.stone-cell {
+    width: 100%;
+    gap: 9px;
+    min-height: 48px;
+    line-height: 1.35;
+  }
+  .stone-cell .stone-thumbnail {
+    width: 36px;
+    height: 36px;
+    border-radius: 10px;
+  }
+  .stone-cell .stone-title {
+    font-size: 16px;
+    font-weight: 650;
+  }
+  .stone-cell .stone-sub {
+    line-height: 1.35;
+  }
+  .stone-disclosure {
+    display: inline-flex;
+    margin-left: auto;
+    color: var(--muted);
+    flex-shrink: 0;
   }
   .record-details > div {
     grid-template-columns: 120px minmax(0, 1fr);
@@ -2687,9 +2780,20 @@ footer {
   input,
   select,
   textarea {
-    font-size: 16px !important; /* kills iOS auto-zoom */
+    font-size: 16px;
+    border-radius: 10px;
+  }
+  input:not([type="checkbox"]),
+  select,
+  textarea {
     min-height: 44px;
-    border-radius: 8px;
+  }
+  .auth-shell {
+    padding: var(--safe-top) var(--safe-right) var(--safe-bottom) var(--safe-left);
+  }
+  .buyer-page {
+    padding: calc(20px + var(--safe-top)) max(16px, var(--safe-right))
+      calc(20px + var(--safe-bottom)) max(16px, var(--safe-left));
   }
   .form-grid {
     grid-template-columns: 1fr;
@@ -2715,7 +2819,7 @@ footer {
     min-height: 44px;
   }
   .table-action-btn {
-    min-height: 36px;
+    min-height: 44px;
     padding: 0 12px;
     font-size: 13px;
   }
@@ -2731,12 +2835,13 @@ footer {
     text-align: center;
   }
   .pagination-controls {
+    flex-wrap: wrap;
     width: 100%;
     justify-content: center;
   }
   .page-btn {
-    min-width: 36px;
-    height: 36px;
+    min-width: 44px;
+    height: 44px;
     font-size: 13px;
   }
   .pagination-ellipsis {
@@ -2785,14 +2890,34 @@ footer {
     display: block;
   }
   .auth-story {
-    padding: 30px 20px;
+    padding: 20px;
+    gap: 9px;
+    border-bottom: 1px solid var(--line);
+  }
+  .auth-story > svg {
+    width: 30px;
+    height: 30px;
+    margin: 0;
   }
   .auth-story h1 {
     font-size: 30px;
+    letter-spacing: -0.035em;
+    margin: 0;
+  }
+  .auth-story p {
+    font-size: 14px;
+    margin: 0;
+  }
+  .auth-note {
+    display: none;
   }
   .auth-form {
-    padding: 24px 20px;
-    max-width: none;
+    padding: 22px 20px;
+    max-width: 520px;
+    margin-inline: auto;
+  }
+  .check-label {
+    min-height: 44px;
   }
   .password-field input {
     min-height: 48px;
@@ -2802,78 +2927,22 @@ footer {
   }
 
   .toast {
-    bottom: calc(72px + env(safe-area-inset-bottom, 16px));
-    width: calc(100% - 28px);
-    left: 14px;
-    right: 14px;
+    bottom: var(--mobile-tab-room);
+    width: min(calc(100% - 28px), 440px);
+    left: 50%;
+    right: auto;
+    pointer-events: none;
     text-align: center;
   }
 }
 
-/* ==========================================================================
-   SMALL PHONE REFINEMENTS (<= 480px)
-   ========================================================================== */
-@media (max-width: 480px) {
-  .page-content {
-    padding: 12px 10px calc(76px + env(safe-area-inset-bottom, 16px));
-  }
-  .filter-group {
-    flex: 1 1 100%;
-    min-width: 100%;
-  }
-  .card-actions-right {
-    flex-direction: column;
+@media screen and (max-width: 480px) {
+  .record-details > div {
+    grid-template-columns: minmax(75px, 30%) minmax(0, 1fr);
     gap: 8px;
   }
-  .card-actions-right .select-pill,
-  .card-actions-right .primary {
-    width: 100%;
-  }
-  .status-summary {
-    grid-template-columns: repeat(2, 1fr);
-    gap: 6px;
-  }
-  .status-summary div {
-    padding: 8px 10px;
-  }
-  .record-details > div {
-    display: flex;
-    flex-direction: column;
-    gap: 4px;
-    padding: 8px 0;
-  }
-  .record-details dt {
-    font-size: 11.5px;
-  }
-  .record-details dd {
-    font-size: 13.5px;
-  }
   .label-preview {
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 12px;
-  }
-}
-
-/* ==========================================================================
-   ULTRA-COMPACT PHONE REFINEMENTS (<= 380px)
-   ========================================================================== */
-@media (max-width: 380px) {
-  .toolbar {
-    padding: max(6px, env(safe-area-inset-top, 0px)) 8px 6px;
-    gap: 6px;
-  }
-  .icon-utility-btn {
-    width: 32px;
-    height: 32px;
-    min-height: 32px;
-  }
-  .global-search-container {
-    height: 34px;
-    padding: 0 8px;
-  }
-  .global-search-input {
-    font-size: 12px;
+    flex-wrap: wrap;
   }
 }
 @media (prefers-reduced-motion: reduce) {
@@ -2886,8 +2955,10 @@ footer {
   }
 }
 @media (prefers-reduced-transparency: reduce) {
-  .toolbar {
-    background: var(--page);
+  .toolbar,
+  .mobile-tab-bar {
+    background: var(--surface);
+    -webkit-backdrop-filter: none;
     backdrop-filter: none;
   }
   dialog::backdrop {
@@ -2964,7 +3035,7 @@ footer {
   border-radius: 5px;
   min-width: 54px;
   background: transparent;
-  color: var(--accent);
+  color: var(--accent-text);
   font-size: 12px;
   font-weight: 600;
   padding: 0 10px;

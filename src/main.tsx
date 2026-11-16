@@ -1,5 +1,6 @@
 import { countries, currencies, currencyDecimals } from "./setup-options";
 import { Purchasing } from "./Purchasing";
+import { Table } from "./RecordsTable";
 import React, { useEffect, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 import {
@@ -59,8 +60,8 @@ const access: Record<string, string[]> = {
   Settings: ["Owner"],
 };
 const descriptions: Record<string, string> = {
-  Overview: "What needs your attention today.",
-  Inventory: "Identity, availability and custody in one stock book.",
+  Overview: "Available stock and pending work.",
+  Inventory: "Find stones, check availability, and track custody.",
   Evidence: "Preserve the originals. Review the wording before sharing.",
   Processing: "Every handover, return weight and processing charge.",
   "Holds & selections": "A selection shares stock. A hold reserves it.",
@@ -74,7 +75,7 @@ const descriptions: Record<string, string> = {
   Reports: "Reconciled records, ready for review and export.",
   "Show mode": "Exclusive stock assignment and signed offline sales.",
   "Activity log": "Who changed what, when, and why.",
-  Assistant: "Ask about records your role is allowed to see.",
+  Assistant: "Read-only answers about your workspace.",
   Walkthrough: "Follow a parcel through the business, one handoff at a time.",
   Settings: "Workspace, people and sign-in security.",
 };
@@ -289,7 +290,7 @@ function GemThumbnail({
     <div
       className={`stone-thumbnail ${type}`}
       title={`${variety}${shape ? ` (${shape})` : ""}`}
-      aria-label={`${variety}${shape ? `, ${shape} cut` : ""}`}
+      aria-hidden="true"
     >
       {icon}
     </div>
@@ -297,7 +298,9 @@ function GemThumbnail({
 }
 function Mark({ name }: { name: string }) {
   const p =
-    name === "search"
+    name === "chevron" ? "m9 6 6 6-6 6"
+      : name === "list" ? "M8 6h12M8 12h12M8 18h12M4 6h.01M4 12h.01M4 18h.01"
+      : name === "search"
       ? "m16 16 5 5 M10 3a7 7 0 1 0 0 14 7 7 0 0 0 0-14"
       : name === "close"
         ? "m6 6 12 12 M6 18 18 6"
@@ -361,11 +364,9 @@ function Mark({ name }: { name: string }) {
 function formatStatusWord(val: string): string {
   switch (val) {
     case "In stock":
-      return "Stock";
+      return "In stock";
     case "On memo":
       return "Memo";
-    case "With lab or cutter":
-      return "Lab";
     case "Review needed":
       return "Review";
     case "Awaiting accounts":
@@ -469,21 +470,14 @@ function Dialog({
     <dialog
       ref={ref}
       aria-labelledby={id}
-      onCancel={onClose}
+      onCancel={(event) => {
+        event.preventDefault();
+        onClose();
+      }}
       onClick={(e) => {
         if (e.target === e.currentTarget) onClose();
       }}
     >
-      <div
-        className="sheet-grab-handle"
-        onClick={onClose}
-        aria-label="Dismiss sheet"
-        role="button"
-        tabIndex={0}
-        onKeyDown={(e) => {
-          if (e.key === "Enter" || e.key === " ") onClose();
-        }}
-      />
       <div className="dialog-head">
         <h2 id={id}>{title}</h2>
         <button
@@ -665,59 +659,6 @@ function Editor({ spec, onClose }: { spec: FormSpec; onClose: () => void }) {
     </Dialog>
   );
 }
-type Column = { label: string; render: (r: Row) => React.ReactNode };
-function Table({
-  data,
-  columns,
-  empty = "No records yet.",
-}: {
-  data: Row[];
-  columns: Column[];
-  empty?: string;
-}) {
-  if (!data.length)
-    return (
-      <div className="empty">
-        <p>{empty}</p>
-      </div>
-    );
-  return (
-    <div className="table-scroll" tabIndex={0} aria-label="Scrollable records">
-      <table>
-        <thead>
-          <tr>
-            {columns.map((c) => (
-              <th
-                key={c.label}
-                className={c.label === "Select" ? "col-select" : undefined}
-              >
-                {c.label === "Select" ? (
-                  <span className="sr-only">Select</span>
-                ) : (
-                  c.label
-                )}
-              </th>
-            ))}
-          </tr>
-        </thead>
-        <tbody>
-          {data.map((r, i) => (
-            <tr key={str(r, "id") || i}>
-              {columns.map((c) => (
-                <td
-                  key={c.label}
-                  className={c.label === "Select" ? "col-select" : undefined}
-                >
-                  {c.render(r)}
-                </td>
-              ))}
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
-  );
-}
 function App() {
   const [user, setUser] = useState<User | null>(null);
   const [setup, setSetup] = useState(false);
@@ -733,13 +674,12 @@ function App() {
   const [form, setForm] = useState<FormSpec | null>(null);
   const [detail, setDetail] = useState<string | null>(null);
   const [menu, setMenu] = useState(false);
+  const [focusAttention, setFocusAttention] = useState(false);
   const [query, setQuery] = useState("");
   const [customerQuery, setCustomerQuery] = useState("");
   const [status, setStatus] = useState("All stock");
   const [selected, setSelected] = useState<string[]>([]);
-  const [viewMode, setViewMode] = useState<"table" | "grid">(
-    () => (typeof window !== "undefined" && window.innerWidth <= 760 ? "grid" : "table"),
-  );
+  const [viewMode, setViewMode] = useState<"table" | "grid">("table");
   const [sortBy, setSortBy] = useState("default");
   const [varietyFilter, setVarietyFilter] = useState("all");
   const [locationFilter, setLocationFilter] = useState("all");
@@ -756,15 +696,21 @@ function App() {
       [title]: !prev[title],
     }));
   };
-  const globalSearchRef = React.useRef<HTMLInputElement>(null);
+  const globalSearchRef = useRef<HTMLInputElement>(null);
+  const stockSearchButton = useRef<HTMLButtonElement>(null);
+  const [focusSearchTrigger, setFocusSearchTrigger] = useState(false);
   const [theme, setTheme] = useState(
-    localStorage.getItem("gem-theme") || "light",
+    localStorage.getItem("gem-theme") ||
+      (matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light"),
   );
   const [refreshing, setRefreshing] = useState(false);
   const [invoice, setInvoice] = useState<Row | null>(null);
   const [importPreview, setImportPreview] = useState<Row | null>(null);
   const [answer, setAnswer] = useState("");
+  const [assistantError, setAssistantError] = useState("");
   const [asking, setAsking] = useState(false);
+  const [extractingFile, setExtractingFile] = useState("");
+  const [extractionError, setExtractionError] = useState<{ fileId: string; message: string } | null>(null);
   const [mfa, setMfa] = useState<Row | null>(null);
   const [showAuthority, setShowAuthority] = useState<Row | null>(() => {
     try {
@@ -786,6 +732,9 @@ function App() {
     : null;
   useEffect(() => {
     document.documentElement.dataset.theme = theme;
+    document.querySelector('meta[name="theme-color"]')?.setAttribute(
+      "content", theme === "dark" ? "#0f172a" : "#ffffff",
+    );
     localStorage.setItem("gem-theme", theme);
   }, [theme]);
   useEffect(() => {
@@ -897,11 +846,26 @@ function App() {
     window.scrollTo(0, 0);
   }, [page]);
   useEffect(() => {
+    if (page !== "Overview" || !focusAttention) return;
+    const attention = document.getElementById("workspace-attention");
+    attention?.focus({ preventScroll: true });
+    attention?.scrollIntoView();
+    setFocusAttention(false);
+  }, [page, focusAttention]);
+  useEffect(() => {
+    if (mobileSearchOpen) globalSearchRef.current?.focus();
+    else if (focusSearchTrigger) {
+      stockSearchButton.current?.focus();
+      setFocusSearchTrigger(false);
+    }
+  }, [mobileSearchOpen, focusSearchTrigger]);
+  useEffect(() => {
     if (!notice) return;
     const timer = setTimeout(() => setNotice(""), 7000);
     return () => clearTimeout(timer);
   }, [notice]);
   const go = (p: string) => {
+    setMobileSearchOpen(false);
     location.hash = encodeURIComponent(p);
     setPage(p);
     setMenu(false);
@@ -1164,9 +1128,11 @@ function App() {
     data: Row[],
     selectable = false,
     customEmpty?: string,
+    preview = false,
   ) => (
     <Table
       data={data}
+      variant={preview ? "stock-preview" : "stock"}
       empty={
         customEmpty ||
         (query
@@ -1197,26 +1163,23 @@ function App() {
           : []),
         {
           label: "Stone / Specification",
+          mobile: "identity",
           render: (r) => (
-            <div className="stone-cell">
-              <GemThumbnail
-                variety={str(r, "variety")}
-                shape={str(r, "shape")}
-              />
-              <div className="stone-meta">
-                <button
-                  type="button"
-                  className="record-link"
-                  onClick={() => setDetail(str(r, "id"))}
-                >
-                  <span className="stone-title">{str(r, "variety")}</span>
-                  <span className="stone-sub">
-                    {str(r, "id")} · {str(r, "shape")}
-                    {r.treatment ? ` · ${str(r, "treatment")}` : ""}
-                  </span>
-                </button>
-              </div>
-            </div>
+            <button
+              type="button"
+              className="record-link stone-cell"
+              onClick={() => setDetail(str(r, "id"))}
+            >
+              <GemThumbnail variety={str(r, "variety")} shape={str(r, "shape")} />
+              <span className="stone-meta">
+                <span className="stone-title">{str(r, "variety")}</span>
+                <span className="stone-sub">
+                  {str(r, "id")} · {str(r, "shape")}
+                  {r.treatment ? ` · ${str(r, "treatment")}` : ""}
+                </span>
+              </span>
+              <span className="stone-disclosure"><Mark name="chevron" /></span>
+            </button>
           ),
         },
         {
@@ -1229,6 +1192,7 @@ function App() {
           ? [
               {
                 label: "List Price",
+                mobile: preview ? "omit" as const : undefined,
                 render: (r: Row) => (
                   <span className="numeric font-medium">
                     {r.price && str(r, "price") !== "0.00"
@@ -1242,6 +1206,7 @@ function App() {
         { label: "Status", render: (r) => <Badge value={r.state} /> },
         {
           label: "Location & Custody",
+          mobile: preview ? "omit" : "full",
           render: (r) => (
             <div className="stone-meta">
               <span className="font-medium">{str(r, "location")}</span>
@@ -1252,6 +1217,7 @@ function App() {
         { label: "Evidence", render: (r) => <Badge value={r.evidence} /> },
         {
           label: "Action",
+          mobile: "omit",
           render: (r) => (
             <div className="action-cell">
               <button
@@ -1410,17 +1376,9 @@ function App() {
     return (
       <div className="auth-shell">
         <section className="auth-story">
-          <Mark name="Inventory" />
-          <h1>
-            A clear record.
-            <br />
-            For every stone.
-          </h1>
-          <p>
-            Stock, custody, evidence and settlement.
-            <br />
-            Follow the work from receipt to return.
-          </p>
+          <GemLogo />
+          <h1>Gem Management</h1>
+          <p>Stock, custody, evidence, and settlement.</p>
           <div className="auth-note">
             Your records stay in this workspace.
             <br />
@@ -1610,11 +1568,36 @@ function App() {
     access[p].includes(user.role),
   );
   const current = visible.includes(page) ? page : "Overview";
+  const mobileTabs = [
+    { page: "Overview", label: "Overview" },
+    ...(visible.includes("Inventory") ? [{ page: "Inventory", label: "Stock" }] : []),
+    ...(visible.includes("Evidence")
+      ? [{ page: "Evidence", label: "Evidence" }]
+      : visible.includes("Processing") ? [{ page: "Processing", label: "Processing" }] : []),
+    ...(visible.includes("Payments") && !visible.includes("Inventory")
+      ? [{ page: "Payments", label: "Payments" }] : []),
+    ...(visible.includes("Sales") ? [{ page: "Sales", label: "Sales" }] : []),
+  ];
+  const activeMobilePage = ["Quotes", "Memos"].includes(current) ? "Sales" : current;
+  const moreIsCurrent = !mobileTabs.some((tab) => tab.page === activeMobilePage);
+  const pendingEvidence = stones.some((stone) => stone.evidence !== "Approved");
+  const activeStockFilters = [
+    status !== "All stock",
+    varietyFilter !== "all",
+    locationFilter !== "all",
+    evidenceFilter !== "all",
+    sortBy !== "default",
+  ].filter(Boolean).length;
   const quotes = list(w, "quotes");
-  const urgentCount =
-    stones.filter((s) => s.evidence === "Conflict").length +
-    quotes.filter((q) => str(q, "status") === "Awaiting owner").length +
-    stones.filter((s) => s.state === "Held").length;
+  const needsAttention = (stone: Row) =>
+    ["Draft", "Returned", "Blocked"].includes(str(stone, "state")) ||
+    stone.evidence !== "Approved";
+  const attentionStones = stones.filter(needsAttention);
+  const overdueMemos = list(w, "memos").filter(
+    (memo) => Date.parse(str(memo, "due")) < Date.now() &&
+      rows(memo.lines).some((line) => line.status === "Pending"),
+  );
+  const urgentCount = attentionStones.length + overdueMemos.length;
   const inventoryView = stones
     .filter(
       (r) =>
@@ -1644,6 +1627,16 @@ function App() {
     (currentPage - 1) * PAGE_SIZE,
     currentPage * PAGE_SIZE,
   );
+  const stockStatusSummary = (
+    <div className="status-summary">
+      {STATES.filter((state) => state !== "In stock").map((state) => (
+        <div key={state}>
+          <span>{formatStatusWord(state)}</span>
+          <strong>{stones.filter((stone) => stone.state === state).length}</strong>
+        </div>
+      ))}
+    </div>
+  );
   return (
     <>
       <a className="skip" href="#main">
@@ -1665,6 +1658,7 @@ function App() {
               const groupPages = group.pages.filter((p) => visible.includes(p));
               if (!groupPages.length) return null;
               const isCollapsed = Boolean(collapsedSections[group.title]);
+              const sectionId = `nav-section-${group.title.toLowerCase().replace(/[^a-z]+/g, "-")}`;
               return (
                 <div key={group.title} className="nav-section">
                   <button
@@ -1672,7 +1666,7 @@ function App() {
                     className="nav-section-toggle"
                     onClick={() => toggleSection(group.title)}
                     aria-expanded={!isCollapsed}
-                    aria-controls={`nav-section-${group.title}`}
+                    aria-controls={sectionId}
                     title={
                       isCollapsed
                         ? `Expand ${group.title}`
@@ -1699,12 +1693,14 @@ function App() {
                     </span>
                   </button>
                   <div
-                    id={`nav-section-${group.title}`}
+                    id={sectionId}
                     className={`nav-section-body ${isCollapsed ? "collapsed" : ""}`}
+                    inert={isCollapsed}
                   >
                     {groupPages.map((p) => (
                       <button
                         key={p}
+                        aria-label={p}
                         aria-current={current === p ? "page" : undefined}
                         className={current === p ? "active" : ""}
                         onClick={() => go(p)}
@@ -1713,7 +1709,7 @@ function App() {
                         <span>{p}</span>
                         {p === "Evidence" &&
                           stones.some((s) => s.evidence !== "Approved") && (
-                            <span className="nav-count">
+                            <span className="nav-count" aria-hidden="true">
                               {
                                 stones.filter((s) => s.evidence !== "Approved")
                                   .length
@@ -1724,7 +1720,7 @@ function App() {
                           quotes.filter(
                             (q) => str(q, "status") === "Awaiting owner",
                           ).length > 0 && (
-                            <span className="nav-count">
+                            <span className="nav-count" aria-hidden="true">
                               {
                                 quotes.filter(
                                   (q) => str(q, "status") === "Awaiting owner",
@@ -1734,7 +1730,7 @@ function App() {
                           )}
                         {p === "Holds & selections" &&
                           stones.some((s) => s.state === "Held") && (
-                            <span className="nav-count">
+                            <span className="nav-count" aria-hidden="true">
                               {stones.filter((s) => s.state === "Held").length}
                             </span>
                           )}
@@ -1754,6 +1750,8 @@ function App() {
                 run(async () => {
                   await request("/api/logout", {});
                   setUser(null);
+                  setAnswer("");
+                  setAssistantError("");
                   setW(null);
                   setCsrf("");
                   localStorage.removeItem("gem-show-authority");
@@ -1771,12 +1769,22 @@ function App() {
               <div className="mobile-search-active-bar">
                 <Mark name="search" />
                 <input
-                  autoFocus
                   ref={globalSearchRef}
-                  aria-label="Search records"
+                  type="search"
+                  enterKeyHint="search"
+                  aria-label="Search stock"
                   value={query}
-                  onChange={(e) => setQuery(e.target.value)}
-                  placeholder="Search stones, custody, certificates..."
+                  onChange={(e) => {
+                    setQuery(e.target.value);
+                    setInventoryPage(1);
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === "Escape" || e.key === "Enter") {
+                      setFocusSearchTrigger(true);
+                      setMobileSearchOpen(false);
+                    }
+                  }}
+                  placeholder="Search stock"
                   className="mobile-search-input"
                 />
                 {query && (
@@ -1795,7 +1803,10 @@ function App() {
                 <button
                   type="button"
                   className="text-button mobile-search-done-btn"
-                  onClick={() => setMobileSearchOpen(false)}
+                  onClick={() => {
+                    setFocusSearchTrigger(true);
+                    setMobileSearchOpen(false);
+                  }}
                 >
                   Done
                 </button>
@@ -1804,7 +1815,7 @@ function App() {
               <>
                 <div className="mobile-toolbar-brand mobile-only">
                   <GemLogo />
-                  <span className="mobile-toolbar-title">{current}</span>
+                  <span className="mobile-toolbar-title">Gem Management</span>
                 </div>
 
                 <div className="toolbar-start desktop-only">
@@ -1835,15 +1846,20 @@ function App() {
                 </div>
 
                 <div className="toolbar-end">
-                  <button
-                    type="button"
-                    className="icon-utility-btn mobile-only"
-                    title="Search"
-                    aria-label="Open search"
-                    onClick={() => setMobileSearchOpen(true)}
-                  >
-                    <Mark name="search" />
-                  </button>
+                  {visible.includes("Inventory") && (
+                    <button
+                      ref={stockSearchButton}
+                      type="button"
+                      className="icon-utility-btn mobile-only"
+                      aria-label="Search stock"
+                      onClick={() => {
+                        go("Inventory");
+                        setMobileSearchOpen(true);
+                      }}
+                    >
+                      <Mark name="search" />
+                    </button>
+                  )}
                   <button
                     type="button"
                     className="icon-utility-btn desktop-only"
@@ -1857,15 +1873,23 @@ function App() {
                     type="button"
                     className="icon-utility-btn"
                     title="Overview & Alerts"
-                    aria-label="Overview & Alerts"
-                    onClick={() => go("Overview")}
+                    aria-label={urgentCount ? `Needs attention: ${urgentCount} records` : "Needs attention"}
+                    onClick={() => {
+                      go("Overview");
+                      if (current === "Overview") {
+                        document.getElementById("workspace-attention")?.focus({ preventScroll: true });
+                        document.getElementById("workspace-attention")?.scrollIntoView();
+                      } else {
+                        setFocusAttention(true);
+                      }
+                    }}
                   >
                     <Mark name="bell" />
                     {urgentCount > 0 && <span className="notification-dot" />}
                   </button>
                   <button
                     type="button"
-                    className="icon-utility-btn"
+                    className="icon-utility-btn desktop-only"
                     title={theme === "light" ? "Dark appearance" : "Light appearance"}
                     aria-label="Toggle theme"
                     onClick={() => setTheme(theme === "light" ? "dark" : "light")}
@@ -2089,40 +2113,38 @@ function App() {
                       }
                       <span>stones & parcels</span>
                     </div>
-                    <p>
-                      Availability also depends on reviewed evidence and
-                      ownership authority.
-                    </p>
-                    <button
-                      className="text-button"
-                      onClick={() => go("Inventory")}
-                    >
-                      Open stock book
-                    </button>
-                  </div>
-                  <div className="status-summary">
-                    {STATES.filter((state) => state !== "In stock").map(
-                      (state) => (
-                        <div key={state}>
-                          <span>{formatStatusWord(state)}</span>
-                          <strong>
-                            {stones.filter((s) => s.state === state).length}
-                          </strong>
-                        </div>
-                      ),
+                    <p>Reviewed, internally held, and authorized for sale.</p>
+                    {visible.includes("Inventory") && (
+                      <button className="text-button desktop-only" onClick={() => go("Inventory")}>
+                        Open stock book
+                      </button>
                     )}
                   </div>
+                  <div className="desktop-only">{stockStatusSummary}</div>
+                  <details className="custody-disclosure mobile-only">
+                    <summary>Custody breakdown</summary>
+                    {stockStatusSummary}
+                  </details>
                 </section>
-                <section className="work-list">
-                  <h2>Needs attention</h2>
-                  {stones
-                    .filter(
-                      (s) =>
-                        ["Draft", "Returned", "Blocked"].includes(
-                          str(s, "state"),
-                        ) || s.evidence !== "Approved",
-                    )
-                    .slice(0, 6)
+                <section className="panel recent-stock">
+                  <div className="section-heading">
+                    <h2>Recent stock</h2>
+                    {visible.includes("Inventory") && (
+                      <button className="text-button" onClick={() => go("Inventory")}>
+                        All stock <Mark name="chevron" />
+                      </button>
+                    )}
+                  </div>
+                  {stoneTable(stones.slice(0, 5), false, undefined, true)}
+                </section>
+                <section
+                  className="work-list"
+                  id="workspace-attention"
+                  tabIndex={-1}
+                  aria-labelledby="attention-heading"
+                >
+                  <h2 id="attention-heading">Needs attention</h2>
+                  {attentionStones.slice(0, 6)
                     .map((s) => (
                       <button
                         key={str(s, "id")}
@@ -2148,23 +2170,12 @@ function App() {
                         />
                       </button>
                     ))}
-                  {!stones.some(
-                    (s) =>
-                      ["Draft", "Returned", "Blocked"].includes(
-                        str(s, "state"),
-                      ) || s.evidence !== "Approved",
-                  ) && (
+                  {!attentionStones.length && !overdueMemos.length && (
                     <p className="muted">
                       No stock waiting for intake or evidence review.
                     </p>
                   )}
-                  {list(w, "memos")
-                    .filter(
-                      (m) =>
-                        Date.parse(str(m, "due")) < Date.now() &&
-                        rows(m.lines).some((l) => l.status === "Pending"),
-                    )
-                    .map((m) => (
+                  {overdueMemos.map((m) => (
                       <button key={str(m, "id")} onClick={() => go("Memos")}>
                         <span>
                           <strong>{str(m, "id")} overdue</strong>
@@ -2175,18 +2186,6 @@ function App() {
                         <Badge value="Overdue" />
                       </button>
                     ))}
-                </section>
-                <section className="panel">
-                  <div className="section-heading">
-                    <h2>Recent stock</h2>
-                    <button
-                      className="text-button"
-                      onClick={() => go("Walkthrough")}
-                    >
-                      Explain the workflow
-                    </button>
-                  </div>
-                  {stoneTable(stones.slice(0, 5))}
                 </section>
               </>
             )}
@@ -2224,6 +2223,7 @@ function App() {
                         key={pill.label}
                         type="button"
                         className={`category-pill ${status === pill.label ? "active" : ""}`}
+                        aria-pressed={status === pill.label}
                         onClick={() => {
                           setStatus(pill.label);
                           setInventoryPage(1);
@@ -2233,27 +2233,6 @@ function App() {
                         <span className="pill-count">{pill.count}</span>
                       </button>
                     ))}
-                    <button
-                      type="button"
-                      className={`category-pill filter-toggle-pill ${
-                        varietyFilter !== "all" ||
-                        locationFilter !== "all" ||
-                        evidenceFilter !== "all"
-                          ? "active-filter"
-                          : ""
-                      }`}
-                      onClick={() => setFilterSheetOpen(true)}
-                    >
-                      <Mark name="filter" />
-                      <span>
-                        Filters
-                        {varietyFilter !== "all" ||
-                        locationFilter !== "all" ||
-                        evidenceFilter !== "all"
-                          ? " •"
-                          : ""}
-                      </span>
-                    </button>
                   </div>
                   <div className="mobile-inventory-subbar">
                     <div className="view-toggle-group">
@@ -2261,34 +2240,51 @@ function App() {
                         type="button"
                         className={`view-toggle-btn ${viewMode === "grid" ? "active" : ""}`}
                         onClick={() => setViewMode("grid")}
-                        title="Grid view"
-                        aria-label="Grid view"
+                        title="Cards"
+                        aria-label="Cards"
+                        aria-pressed={viewMode === "grid"}
                       >
-                        <Mark name="grid" />
+                        <Mark name="grid" /> Cards
                       </button>
                       <button
                         type="button"
                         className={`view-toggle-btn ${viewMode === "table" ? "active" : ""}`}
                         onClick={() => setViewMode("table")}
-                        title="Table view"
-                        aria-label="Table view"
+                        title="List"
+                        aria-label="List"
+                        aria-pressed={viewMode === "table"}
                       >
-                        <Mark name="table" />
+                        <Mark name="list" /> List
                       </button>
                     </div>
-                    {can("Inventory clerk") && (
-                      <button
-                        type="button"
-                        className="primary compact"
-                        onClick={openReceive}
-                      >
-                        <Mark name="plus" />
-                        <span>Receive</span>
-                      </button>
-                    )}
+                    <button
+                      type="button"
+                      className={`secondary filter-toggle-pill${activeStockFilters ? " active-filter" : ""}`}
+                      onClick={() => setFilterSheetOpen(true)}
+                      aria-haspopup="dialog"
+                      aria-description={activeStockFilters ? `${activeStockFilters} active` : undefined}
+                    >
+                      <Mark name="filter" />
+                      Filters {activeStockFilters ? `(${activeStockFilters})` : ""}
+                    </button>
                   </div>
                 </div>
 
+                {query && (
+                  <div className="stock-search-summary mobile-only">
+                    <span>Search: <strong>{query}</strong></span>
+                    <button
+                      type="button"
+                      className="text-button"
+                      onClick={() => {
+                        setQuery("");
+                        setInventoryPage(1);
+                      }}
+                    >
+                      Clear
+                    </button>
+                  </div>
+                )}
                 <section className="panel">
                   {/* Top Card Action Bar matching the reference UI (Desktop Only) */}
                   <div className="card-action-bar desktop-only">
@@ -2464,7 +2460,7 @@ function App() {
                   {/* Selected Action Bar */}
                   {selected.length > 0 && (
                     <div className="selection-bar">
-                      <strong>{selected.length} stones selected</strong>
+                      <strong role="status">{selected.length} {selected.length === 1 ? "stone" : "stones"} selected</strong>
                       {can("Sales staff") && (
                         <>
                           <button
@@ -3555,11 +3551,10 @@ function App() {
             )}
             {current === "Assistant" && (
               <section className="assistant-workspace">
-                <h2>Ask about your workspace</h2>
+                <h2>Ask about your records</h2>
                 <p>
-                  Answers use records visible to your role. AI can explain and
-                  help you investigate; it cannot approve evidence, change stock
-                  or post money.
+                  Read-only. Answers use records you can access. The assistant
+                  cannot approve evidence, change stock, or post transactions.
                 </p>
                 {!w.aiConfigured ? (
                   <div className="info-note">
@@ -3569,18 +3564,21 @@ function App() {
                   </div>
                 ) : (
                   <form
+                    className="assistant-composer"
+                    aria-busy={asking}
                     onSubmit={async (e) => {
                       e.preventDefault();
                       const data = new FormData(e.currentTarget);
                       setAsking(true);
-                      setError("");
+                      setAssistantError("");
+                      setAnswer("");
                       try {
                         const r = await request("/api/assistant", {
                           question: data.get("question"),
                         });
                         setAnswer(str(r, "answer"));
                       } catch (e) {
-                        setError((e as Error).message);
+                        setAssistantError((e as Error).message);
                       } finally {
                         setAsking(false);
                       }
@@ -3596,20 +3594,24 @@ function App() {
                         rows={4}
                       />
                     </label>
-                    <button className="primary" disabled={asking}>
-                      {asking ? "Reading authorized records…" : "Ask workspace"}
-                    </button>
+                    <div className="assistant-controls">
+                      <span className="muted">Up to 1,500 characters</span>
+                      <button className="primary" disabled={asking}>
+                        {asking ? "Reading records…" : "Ask assistant"}
+                      </button>
+                    </div>
                   </form>
                 )}
-                {answer && (
-                  <div className="assistant-answer">
-                    <small>
-                      AI draft. Check the referenced records before making a
-                      decision.
-                    </small>
-                    <p>{answer}</p>
-                  </div>
-                )}
+                {assistantError && <p className="error" role="alert">{assistantError}</p>}
+                <div aria-live="polite">
+                  {answer && (
+                    <section className="assistant-answer">
+                      <h3>AI-generated answer</h3>
+                      <small>Verify the answer against the original records.</small>
+                      <p>{answer}</p>
+                    </section>
+                  )}
+                </div>
               </section>
             )}
             {current === "Walkthrough" && (
@@ -4207,133 +4209,53 @@ function App() {
         </main>
       </div>
 
-      {/* Apple-style Mobile Bottom Tab Bar (Role-Adaptive) */}
       <nav className="mobile-tab-bar" aria-label="Quick navigation">
+        {mobileTabs.map((tab) => {
+          const active = activeMobilePage === tab.page;
+          const showBadge = tab.page === "Evidence" && pendingEvidence;
+          return (
+            <button
+              key={tab.page}
+              type="button"
+              className={`mobile-tab-btn${active && !menu ? " active" : ""}`}
+              onClick={() => {
+                if (current !== tab.page) {
+                  go(tab.page);
+                  return;
+                }
+                window.scrollTo({
+                  top: 0,
+                  behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth",
+                });
+              }}
+              aria-current={active ? "page" : undefined}
+              aria-description={showBadge ? "Review pending" : undefined}
+            >
+              <span className="tab-icon-wrap">
+                <Mark name={tab.page} />
+                {showBadge && <span className="tab-badge-dot" aria-hidden="true" />}
+              </span>
+              <span>{tab.label}</span>
+            </button>
+          );
+        })}
         <button
           type="button"
-          className={`mobile-tab-btn ${current === "Overview" ? "active" : ""}`}
-          onClick={() => go("Overview")}
-          aria-current={current === "Overview" ? "page" : undefined}
-        >
-          <Mark name="Overview" />
-          <span>Overview</span>
-        </button>
-        {visible.includes("Inventory") && (
-          <button
-            type="button"
-            className={`mobile-tab-btn ${current === "Inventory" ? "active" : ""}`}
-            onClick={() => go("Inventory")}
-            aria-current={current === "Inventory" ? "page" : undefined}
-          >
-            <Mark name="Inventory" />
-            <span>Stock</span>
-          </button>
-        )}
-        {visible.includes("Evidence") && (
-          <button
-            type="button"
-            className={`mobile-tab-btn ${current === "Evidence" ? "active" : ""}`}
-            onClick={() => go("Evidence")}
-            aria-current={current === "Evidence" ? "page" : undefined}
-          >
-            <div className="tab-icon-wrap">
-              <Mark name="Evidence" />
-              {stones.some((s) => s.evidence !== "Approved") && (
-                <span className="tab-badge-dot" />
-              )}
-            </div>
-            <span>Evidence</span>
-          </button>
-        )}
-        {visible.includes("Processing") && !visible.includes("Evidence") && (
-          <button
-            type="button"
-            className={`mobile-tab-btn ${current === "Processing" ? "active" : ""}`}
-            onClick={() => go("Processing")}
-            aria-current={current === "Processing" ? "page" : undefined}
-          >
-            <Mark name="Processing" />
-            <span>Processing</span>
-          </button>
-        )}
-        {visible.includes("Payments") && !visible.includes("Inventory") && (
-          <button
-            type="button"
-            className={`mobile-tab-btn ${current === "Payments" ? "active" : ""}`}
-            onClick={() => go("Payments")}
-            aria-current={current === "Payments" ? "page" : undefined}
-          >
-            <Mark name="Payments" />
-            <span>Payments</span>
-          </button>
-        )}
-        {visible.includes("Sales") && (
-          <button
-            type="button"
-            className={`mobile-tab-btn ${["Sales", "Quotes", "Memos"].includes(current) ? "active" : ""}`}
-            onClick={() => go("Sales")}
-            aria-current={["Sales", "Quotes", "Memos"].includes(current) ? "page" : undefined}
-          >
-            <Mark name="Sales" />
-            <span>Sales</span>
-          </button>
-        )}
-        <button
-          type="button"
-          className={`mobile-tab-btn ${menu ? "active" : ""}`}
+          className={`mobile-tab-btn ${menu || moreIsCurrent ? "active" : ""}`}
           onClick={() => setMenu(true)}
           aria-label="More workspaces"
           aria-expanded={menu}
+          aria-haspopup="dialog"
+          aria-current={moreIsCurrent ? "location" : undefined}
         >
           <Mark name="menu" />
           <span>More</span>
         </button>
       </nav>
 
-      {/* Dedicated Clean Mobile Navigation & Tools Sheet */}
       {menu && (
-        <Dialog title="Workspaces & Navigation" onClose={() => setMenu(false)}>
+        <Dialog title="Workspaces & settings" onClose={() => setMenu(false)}>
           <div className="more-menu-content">
-            {NAV_GROUPS.map((group) => {
-              const groupPages = group.pages.filter((p) => visible.includes(p));
-              if (!groupPages.length) return null;
-              return (
-                <div key={group.title} className="more-group">
-                  <h4 className="more-group-title">{group.title}</h4>
-                  <div className="more-group-grid">
-                    {groupPages.map((p) => (
-                      <button
-                        key={p}
-                        type="button"
-                        className={`more-item-card ${current === p ? "active" : ""}`}
-                        onClick={() => {
-                          go(p);
-                          setMenu(false);
-                        }}
-                      >
-                        <div className="more-item-icon">
-                          <Mark name={p} />
-                        </div>
-                        <div className="more-item-info">
-                          <strong>{p}</strong>
-                          <small>{descriptions[p] || "Open workspace"}</small>
-                        </div>
-                        {p === "Evidence" &&
-                          stones.some((s) => s.evidence !== "Approved") && (
-                            <span className="badge-count">
-                              {
-                                stones.filter(
-                                  (s) => s.evidence !== "Approved",
-                                ).length
-                              }
-                            </span>
-                          )}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              );
-            })}
             <div className="more-account-card">
               <div className="more-account-header">
                 <div className="user-avatar">
@@ -4362,6 +4284,8 @@ function App() {
                     run(async () => {
                       await request("/api/logout", {});
                       setUser(null);
+                      setAnswer("");
+                      setAssistantError("");
                       setW(null);
                       setCsrf("");
                       localStorage.removeItem("gem-show-authority");
@@ -4373,17 +4297,73 @@ function App() {
                 </button>
               </div>
             </div>
+            {NAV_GROUPS.map((group) => {
+              const groupPages = group.pages.filter((p) => visible.includes(p));
+              if (!groupPages.length) return null;
+              return (
+                <div key={group.title} className="more-group">
+                  <h3 className="more-group-title">{group.title}</h3>
+                  <div className="more-group-grid">
+                    {groupPages.map((p) => (
+                      <button
+                        key={p}
+                        type="button"
+                        className={`more-item-card ${current === p ? "active" : ""}`}
+                        aria-current={current === p ? "page" : undefined}
+                        onClick={() => {
+                          go(p);
+                          setMenu(false);
+                        }}
+                      >
+                        <div className="more-item-icon">
+                          <Mark name={p} />
+                        </div>
+                        <div className="more-item-info">
+                          <strong>{p}</strong>
+                          <small>{descriptions[p] || "Open workspace"}</small>
+                        </div>
+                        {p === "Evidence" &&
+                          stones.some((s) => s.evidence !== "Approved") && (
+                            <span className="badge-count">
+                              {
+                                stones.filter(
+                                  (s) => s.evidence !== "Approved",
+                                ).length
+                              }
+                            </span>
+                          )}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              );
+            })}
+
           </div>
         </Dialog>
       )}
 
-      {/* Dedicated Clean Mobile Filter & Sorting Sheet */}
       {filterSheetOpen && (
         <Dialog
-          title="Filter & Sort Inventory"
+          title="Filters & sort"
           onClose={() => setFilterSheetOpen(false)}
         >
           <div className="filter-sheet-body">
+            <div className="filter-sheet-field">
+              <label htmlFor="m-status" className="filter-label">Custody status</label>
+              <select
+                id="m-status"
+                className="filter-select"
+                value={status}
+                onChange={(event) => {
+                  setStatus(event.target.value);
+                  setInventoryPage(1);
+                }}
+              >
+                <option>All stock</option>
+                {STATES.map((state) => <option key={state}>{state}</option>)}
+              </select>
+            </div>
             <div className="filter-sheet-field">
               <label htmlFor="m-variety" className="filter-label">
                 Gem Variety & Species
@@ -4474,6 +4454,7 @@ function App() {
                 type="button"
                 className="secondary"
                 onClick={() => {
+                  setStatus("All stock");
                   setVarietyFilter("all");
                   setLocationFilter("all");
                   setEvidenceFilter("all");
@@ -4489,7 +4470,7 @@ function App() {
                 className="primary"
                 onClick={() => setFilterSheetOpen(false)}
               >
-                Apply Filters
+                Done
               </button>
             </div>
           </div>
@@ -4995,103 +4976,112 @@ function App() {
           {list(w, "fileMeta")
             .filter((f) => f.stoneId === s.id)
             .map((f) => (
-              <p key={str(f, "id")}>
+              <div className="evidence-file" key={str(f, "id")}>
                 <a href={`/api/files/${f.id}`}>{str(f, "name")}</a>
                 <small>
                   {Math.ceil(Number(f.size) / 1024)} KB · Original preserved
                 </small>
                 {w.aiConfigured && (
-                  <button
-                    type="button"
-                    className="text-button"
-                    disabled={asking}
-                    onClick={async () => {
-                      setAsking(true);
-                      setError("");
-                      try {
-                        const r = await request(
-                          `/api/files/${f.id}/extract`,
-                          {},
-                        );
-                        const draft = r.draft as Row;
-                        setForm({
-                          title: "Review AI-extracted report",
-                          intro:
-                            "This document was sent to the configured AI provider. Compare every field against the original. Saving preserves a claim draft for reviewer approval; it does not change the stone identity.",
-                          submit: "Confirm fields & preserve claim",
-                          fields: [
-                            ...[
-                              "reportNumber",
-                              "variety",
-                              "carats",
-                              "treatment",
-                              "origin",
-                              "sourceNotes",
-                            ].map((key) => ({
-                              key,
-                              label: (
-                                {
-                                  reportNumber: "Report number",
-                                  variety: "Variety",
-                                  carats: "Weight (ct)",
-                                  treatment: "Treatment",
-                                  origin: "Origin opinion",
-                                  sourceNotes: "Source snippets and pages",
-                                } as Record<string, string>
-                              )[key],
-                              value: str(draft, key),
-                              required: false,
-                              type: key === "sourceNotes" ? "textarea" : "text",
-                            })),
-                            {
-                              key: "confirmed",
-                              label:
-                                "I checked report number, weight, treatment and origin against the original",
-                              type: "checkbox",
+                  <div className="extraction-action">
+                    <p id={`extract-${f.id}`} className="muted">
+                      Extraction sends this report to the configured AI provider.
+                    </p>
+                    <button
+                      type="button"
+                      className="secondary"
+                      aria-describedby={`extract-${f.id}`}
+                      disabled={Boolean(extractingFile)}
+                      onClick={async () => {
+                        setExtractingFile(str(f, "id"));
+                        setExtractionError(null);
+                        try {
+                          const r = await request(
+                            `/api/files/${f.id}/extract`,
+                            {},
+                          );
+                          const draft = r.draft as Row;
+                          setForm({
+                            title: "Review AI-extracted report",
+                            intro:
+                              "Compare each extracted field with the original report. Saving creates a claim draft for reviewer approval; it does not approve evidence or change the stone identity.",
+                            submit: "Confirm fields & preserve claim",
+                            fields: [
+                              ...[
+                                "reportNumber",
+                                "variety",
+                                "carats",
+                                "treatment",
+                                "origin",
+                                "sourceNotes",
+                              ].map((key) => ({
+                                key,
+                                label: (
+                                  {
+                                    reportNumber: "Report number",
+                                    variety: "Variety",
+                                    carats: "Weight (ct)",
+                                    treatment: "Treatment",
+                                    origin: "Origin opinion",
+                                    sourceNotes: "Source snippets and pages",
+                                  } as Record<string, string>
+                                )[key],
+                                value: str(draft, key),
+                                required: false,
+                                type: key === "sourceNotes" ? "textarea" : "text",
+                              })),
+                              {
+                                key: "confirmed",
+                                label:
+                                  "I checked report number, weight, treatment and origin against the original",
+                                type: "checkbox",
+                              },
+                            ],
+                            onSubmit: async (v) => {
+                              if (v.confirmed !== "true")
+                                throw new Error(
+                                  "Check the critical fields before saving.",
+                                );
+                              const current = list(
+                                await request<Workspace>("/api/workspace"),
+                                "stones",
+                              ).find((x) => x.id === s.id);
+                              await execute("claim", {
+                                stoneId: s.id,
+                                version: current?.version,
+                                type: "Lab opinion",
+                                reportNumber: v.reportNumber,
+                                fileId: f.id,
+                                source: "AI",
+                                aiConfirmed: true,
+                                statement: JSON.stringify(
+                                  {
+                                    variety: v.variety,
+                                    carats: v.carats,
+                                    treatment: v.treatment,
+                                    origin: v.origin,
+                                    sourceNotes: v.sourceNotes,
+                                  },
+                                  null,
+                                  2,
+                                ),
+                              });
                             },
-                          ],
-                          onSubmit: async (v) => {
-                            if (v.confirmed !== "true")
-                              throw new Error(
-                                "Check the critical fields before saving.",
-                              );
-                            const current = list(
-                              await request<Workspace>("/api/workspace"),
-                              "stones",
-                            ).find((x) => x.id === s.id);
-                            await execute("claim", {
-                              stoneId: s.id,
-                              version: current?.version,
-                              type: "Lab opinion",
-                              reportNumber: v.reportNumber,
-                              fileId: f.id,
-                              source: "AI",
-                              aiConfirmed: true,
-                              statement: JSON.stringify(
-                                {
-                                  variety: v.variety,
-                                  carats: v.carats,
-                                  treatment: v.treatment,
-                                  origin: v.origin,
-                                  sourceNotes: v.sourceNotes,
-                                },
-                                null,
-                                2,
-                              ),
-                            });
-                          },
-                        });
-                      } catch (e) {
-                        setError((e as Error).message);
-                      } finally {
-                        setAsking(false);
-                      }
-                    }}
-                  >
-                    {asking ? "Reading report…" : "Extract AI draft"}
-                  </button>
+                          });
+                        } catch (e) {
+                          setExtractionError({ fileId: str(f, "id"), message: (e as Error).message });
+                        } finally {
+                          setExtractingFile("");
+                        }
+                      }}
+                    >
+                      {extractingFile === f.id ? "Reading report…" : "Extract AI draft"}
+                    </button>
+                    {extractionError?.fileId === str(f, "id") && (
+                      <p className="error" role="alert">{extractionError.message}</p>
+                    )}
+                  </div>
                 )}
-              </p>
+              </div>
             ))}
           {!list(w, "claims").some((c) => c.stoneId === s.id) && (
             <p className="muted">No versioned claims attached yet.</p>
@@ -5438,6 +5428,7 @@ function Buyer({ token }: { token: string }) {
               { label: "Weight", render: (s) => `${s.carats} ct` },
               {
                 label: "Reviewed description",
+                mobile: "full",
                 render: (s) => str(s, "disclosure"),
               },
               {

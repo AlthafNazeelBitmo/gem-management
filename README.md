@@ -91,3 +91,7 @@ npm run test:e2e
 ```
 
 API tests use a temporary isolated database and check role restrictions, concurrent stock control, memo partial outcomes, exact decimal money, processing conservation, uploads, private buyer fields, credits/refunds, quotes, foreign exchange, signed show replay and imports. Browser tests use separate API/Vite ports and an isolated database.
+
+### Use on an iPhone
+
+Open the workspace's reachable HTTPS URL in Safari. From **Share**, choose **Add to Home Screen**, then enable **Open as Web App** if shown. Open **Gem Stock** from the Home Screen. A link to `localhost` on your Mac won't reach the workspace from your phone. Home Screen installation does not make the workspace generally available offline; only the existing assigned Show mode supports offline work.

@@ -1,10 +1,12 @@
 import { test, before, after } from "node:test";
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 const directory = mkdtempSync(path.join(tmpdir(), "gem-api-test-"));
+// An existing empty file prevents the database loader from copying workstation or demo records.
+writeFileSync(path.join(directory, "gem.sqlite"), "", { mode: 0o600 });
 const port = 3219,
   base = `http://127.0.0.1:${port}`;
 let server;

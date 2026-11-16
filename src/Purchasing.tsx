@@ -1,3 +1,4 @@
+import { Table } from "./RecordsTable";
 import { list, str, rows, type Row, type Workspace } from "./api";
 import type { FormSpec } from "./main";
 type Props = {
@@ -222,68 +223,61 @@ export function Purchasing({ workspace: w, role, open, execute }: Props) {
                 </button>
               )}
             </div>
-            <div className="table-scroll">
-              <table>
-                <thead>
-                  <tr>
-                    <th>Stone</th>
-                    <th>Outcome</th>
-                    {accounts && <th>Supplier cost</th>}
-                    <th>Return</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {rows(m.lines).map((l) => (
-                    <tr key={str(l, "stoneId")}>
-                      <td>{str(l, "stoneId")}</td>
-                      <td>{str(l, "status")}</td>
-                      {accounts && (
-                        <td>
-                          {str(l, "cost")} {currency}
-                        </td>
-                      )}
-                      <td>
-                        {clerk && l.status === "Pending" ? (
-                          <button
-                            className="text-button"
-                            onClick={() =>
-                              open({
-                                title: "Return to supplier",
-                                intro:
-                                  "The stone must be internally held and free of reservations or show assignments.",
-                                submit: "Record supplier return",
-                                fields: [
-                                  {
-                                    key: "condition",
-                                    label: "Return condition",
-                                    type: "textarea",
-                                  },
-                                ],
-                                onSubmit: async (v) => {
-                                  const stone = list(w, "stones").find(
-                                    (s) => s.id === l.stoneId,
-                                  );
-                                  await execute("return-supplier", {
-                                    ...v,
-                                    memoId: m.id,
-                                    id: l.stoneId,
-                                    version: stone?.version,
-                                  });
-                                },
-                              })
-                            }
-                          >
-                            Return stone
-                          </button>
-                        ) : (
-                          str(l, "invoiceId") || "Recorded"
-                        )}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+            <Table
+              data={rows(m.lines)}
+              columns={[
+                { label: "Stone", render: (line) => str(line, "stoneId") },
+                { label: "Outcome", render: (line) => str(line, "status") },
+                ...(accounts
+                  ? [
+                      {
+                        label: "Supplier cost",
+                        render: (line: Row) =>
+                          `${str(line, "cost")} ${currency}`,
+                      },
+                    ]
+                  : []),
+                {
+                  label: "Return",
+                  render: (l) =>
+                    clerk && l.status === "Pending" ? (
+                      <button
+                        className="text-button"
+                        onClick={() =>
+                          open({
+                            title: "Return to supplier",
+                            intro:
+                              "The stone must be internally held and free of reservations or show assignments.",
+                            submit: "Record supplier return",
+                            fields: [
+                              {
+                                key: "condition",
+                                label: "Return condition",
+                                type: "textarea",
+                              },
+                            ],
+                            onSubmit: async (v) => {
+                              const stone = list(w, "stones").find(
+                                (s) => s.id === l.stoneId,
+                              );
+                              await execute("return-supplier", {
+                                ...v,
+                                memoId: m.id,
+                                id: l.stoneId,
+                                version: stone?.version,
+                              });
+                            },
+                          })
+                        }
+                      >
+                        Return stone
+                      </button>
+                    ) : (
+                      str(l, "invoiceId") || "Recorded"
+                    ),
+                },
+              ]}
+            />
           </section>
         ))
       )}

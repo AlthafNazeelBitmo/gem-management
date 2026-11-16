@@ -1,0 +1,15 @@
+{
+  "id": "/",
+  "name": "Gem Management",
+  "short_name": "Gem Stock",
+  "description": "Gemstone inventory, evidence, custody, and sales.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#f5f6fa",
+  "theme_color": "#ffffff",
+  "icons": [
+    { "src": "/icons/gem-192.png", "type": "image/png", "sizes": "192x192", "purpose": "any" },
+    { "src": "/icons/gem-512.png", "type": "image/png", "sizes": "512x512", "purpose": "any maskable" }
+  ]
+}

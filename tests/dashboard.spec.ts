@@ -34,9 +34,9 @@ test("persistent parcel journey, buyer-safe sharing, navigation and responsive a
   await page
     .getByLabel("Launch country", { exact: true })
     .selectOption("Sri Lanka");
-  await page
-    .getByLabel("Use this workspace for training and demonstrations")
-    .check();
+  await expect(
+    page.getByLabel("Use this workspace for training and demonstrations"),
+  ).not.toBeChecked();
   await page
     .getByRole("button", { name: "Create workspace", exact: true })
     .click();
@@ -195,16 +195,16 @@ test("persistent parcel journey, buyer-safe sharing, navigation and responsive a
     path: "test-results/workspace-desktop.png",
     fullPage: true,
   });
-  await page.getByRole("button", { name: "Dark appearance" }).click();
+  await page.getByRole("button", { name: "Toggle theme" }).click();
   scan = await new AxeBuilder({ page })
     .withTags(["wcag2a", "wcag2aa", "wcag21aa"])
     .analyze();
   expect(scan.violations).toEqual([]);
   await page.setViewportSize({ width: 390, height: 844 });
-  await page.getByRole("button", { name: "Open navigation" }).click();
+  await page.getByRole("button", { name: "More workspaces" }).click();
   await page
-    .locator("nav")
-    .getByRole("button", { name: "Walkthrough", exact: true })
+    .getByRole("dialog")
+    .getByRole("button", { name: /^Walkthrough/ })
     .click();
   await expect(page.locator("main h1")).toHaveText("Walkthrough");
   expect(

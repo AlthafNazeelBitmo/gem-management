@@ -15,7 +15,7 @@ Reading this as a professional stock workspace with Apple's clarity and restrain
 - Icons: consistent single-weight line symbols aid navigation; synthetic gemstone illustrations are removed because the demo has no real intake photographs.
 - Navigation: one-level sidebar stays familiar and quiet; the current location receives a subtle indigo selection. The mobile drawer has a scrim and Escape dismissal, and closed navigation is hidden from keyboard traversal.
 - Controls: the reporting period is shown only on the overview where it changes the activity feed. A segmented stock selector and text links expose common operations without extra chrome.
-- Mobile: overview stock rows reflow into two-line records instead of a shrunken desktop table. Full inventory tables remain horizontally scrollable so custody and evidence fields stay available.
+- Mobile: overview and full inventory reflow into stacked records instead of a shrunken desktop table. Full inventory keeps custody, evidence, weight, and role-permitted price fields.
 - Motion: immediate press feedback and short hover transitions confirm input. There are no entrance animations or decorative movement; reduced motion disables transitions.
 - Material: only the sticky toolbar has subtle translucency, to keep the scrolled content distinct. Reduced transparency and increased contrast use an opaque surface.
 - Identity: permanent IDs, explicit custody, evidence status, and memo deadlines make the workspace specific to gem operations.
@@ -40,8 +40,12 @@ The original direction remains ENERGY 1 / RHYTHM 2 / MOTION 1. System typography
 - The first-run form creates real owner credentials instead of a role-preview selector.
 - Native dialogs keep a transaction focused, preserve form errors, and return keyboard focus after closing.
 - Light/dark tokens preserve the same hierarchy; appearance changes are immediate to avoid intermediate low-contrast text.
-- Mobile navigation becomes a labelled drawer with focus management; wide records scroll within their own container.
+- Mobile navigation uses labeled bottom tabs and a modal More sheet with focus management; desktop tables keep local overflow where needed.
 - The walkthrough follows the actual seven business handoffs rather than a generic three-step presentation.
 - AI is confined to a read-only question workspace and explicit report extraction. Setup status is visible, draft fields require confirmation, and stock/money controls remain deterministic.
 - Original documents are private unless a reviewer explicitly selects them for buyer sharing.
 - External payment, accounting, shipping, tax and marketplace services are identified as unconnected. No interface claims these integrations work.
+
+## iPhone Home Screen pass
+
+The mobile navigation is now a safe-area-aware toolbar and labeled, role-aware bottom tab bar. Overflow workspaces and appearance controls are in a native-dialog sheet. Phone records use labeled, stacked rows rather than horizontal desktop tables; the desktop tables and their fields remain available at wider widths. Overview uses a compact recent-stock preview with a detail link on each row, while Stock retains both detailed list and card views. Native scrolling remains uninterrupted; the brief sheet entry and press feedback respect Reduce Motion. The workspace can be added from Safari through Add to Home Screen; it uses its own icon and standalone manifest. This does not enable offline transactions outside the existing Show mode workflow.
