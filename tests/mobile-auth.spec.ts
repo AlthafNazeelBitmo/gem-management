@@ -109,3 +109,20 @@ test("owner setup is readable in dark mode at 320px and preserves currency defau
     fullPage: true,
   });
 });
+
+test("setup header reserves the status-bar inset and stays in place while scrolling", async ({ page }) => {
+  await page.route("**/api/auth", (route) =>
+    route.fulfill({ json: { setupRequired: true, user: null } }),
+  );
+  await page.goto("/");
+  await page.addStyleTag({ content: ":root { --safe-top: 59px; }" });
+  const header = page.locator(".auth-top-bar");
+  const title = page.getByRole("heading", { name: "Create your workspace" });
+  await expect(title).toBeVisible();
+  const box = (await header.boundingBox())!;
+  expect(box.y).toBe(0);
+  expect(box.height).toBeGreaterThanOrEqual(101);
+  expect((await title.boundingBox())!.y).toBeGreaterThan(box.y + box.height);
+  await page.getByRole("button", { name: "Create workspace" }).scrollIntoViewIfNeeded();
+  expect((await header.boundingBox())!.y).toBe(0);
+});

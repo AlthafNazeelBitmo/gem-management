@@ -1595,6 +1595,10 @@ function App() {
   if (!user)
     return (
       <main className={`auth-shell${setup ? " auth-setup" : ""}`}>
+        <header className="auth-top-bar">
+          <img src="/icons/gem-180.png" width="22" height="22" alt="" />
+          <span>Gem Management</span>
+        </header>
         <section className="auth-form" aria-labelledby="auth-title">
           <header className="auth-heading">
             <img
