@@ -1,6 +1,7 @@
 import { countries, currencies, currencyDecimals } from "./setup-options";
 import { baseMoney } from "./money";
 import { Purchasing } from "./Purchasing";
+import { compactWorkspace, hasSheetHistory, MobileSheetHistory } from "./mobile-sheets";
 import { Table } from "./RecordsTable";
 import React, { useEffect, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
@@ -81,6 +82,23 @@ const descriptions: Record<string, string> = {
   Assistant: "Read-only answers about your workspace.",
   Walkthrough: "Follow a parcel through the business, one handoff at a time.",
   Settings: "Workspace, people and sign-in security.",
+};
+const workspaceKeywords: Record<string, string> = {
+  Inventory: "stock stones gems vault",
+  Purchasing: "supplier vendor consignment purchase order",
+  Sales: "invoice invoices buyer sale",
+  Customers: "client buyer contact",
+  Evidence: "certificate lab report verification disclosure",
+  Processing: "cutting cutter laboratory",
+  Payments: "receipts balance settlement",
+  "Show mode": "offline event device",
+};
+const inventorySortLabels: Record<string, string> = {
+  default: "Default order",
+  "weight-desc": "Weight: High to Low",
+  "weight-asc": "Weight: Low to High",
+  "price-desc": "Price: High to Low",
+  "price-asc": "Price: Low to High",
 };
 const NAV_GROUPS: { title: string; pages: string[] }[] = [
   {
@@ -515,6 +533,7 @@ export type FormSpec = {
   intro?: string;
   fields: Field[];
   submit: string;
+  groupOptional?: boolean;
   onSubmit: (
     values: Record<string, string>,
     file: File | null,
@@ -551,6 +570,7 @@ function Editor({ spec, onClose }: { spec: FormSpec; onClose: () => void }) {
   const [error, setError] = useState("");
   const [invalidField, setInvalidField] = useState("");
   const formRef = useRef<HTMLFormElement>(null);
+  const optionalDetails = useRef<HTMLDetailsElement>(null);
   const errorId = React.useId();
   const [busy, setBusy] = useState(false);
   const busyRef = useRef(false);
@@ -569,8 +589,10 @@ function Editor({ spec, onClose }: { spec: FormSpec; onClose: () => void }) {
   useEffect(() => {
     if (!error) return;
     const control = invalidField ? formRef.current?.elements.namedItem(invalidField) : null;
-    if (control instanceof HTMLElement) control.focus();
-    else errorRef.current?.focus();
+    if (control instanceof HTMLElement) {
+      if (optionalDetails.current?.contains(control)) optionalDetails.current.open = true;
+      control.focus();
+    } else errorRef.current?.focus();
   }, [error, invalidField]);
   const dismiss = () => {
     if (busyRef.current) return;
@@ -580,6 +602,98 @@ function Editor({ spec, onClose }: { spec: FormSpec; onClose: () => void }) {
       setConfirmDiscard(true);
     } else onClose();
   };
+  const renderField = (f: Field) => f.type === "multiple" ? (
+    <OptionChecklist key={f.key} field={f} />
+  ) : (
+    <label
+      key={f.key}
+      className={f.type === "checkbox" ? "check-label" : ""}
+    >
+      {f.type === "checkbox" ? (
+        <>
+          <input
+            name={f.key}
+            aria-label={f.label}
+            aria-invalid={invalidField === f.key || undefined}
+            aria-describedby={invalidField === f.key ? errorId : undefined}
+            type="checkbox"
+            defaultChecked={f.value === "true"}
+          />
+          {f.label}
+        </>
+      ) : (
+        <>
+          <span>
+            {f.label}
+            {f.required === false ? " (optional)" : ""}
+          </span>
+          {f.type === "textarea" ? (
+            <textarea
+              name={f.key}
+              aria-label={f.label}
+              aria-invalid={invalidField === f.key || undefined}
+              aria-describedby={invalidField === f.key ? errorId : undefined}
+              defaultValue={f.value}
+              required={f.required !== false}
+              rows={4}
+            />
+          ) : f.options ? (
+            <select
+              name={f.key}
+              aria-label={f.label}
+              aria-invalid={invalidField === f.key || undefined}
+              aria-describedby={invalidField === f.key ? errorId : undefined}
+              defaultValue={f.value || ""}
+              required={f.required !== false}
+            >
+              <option value="" disabled>Choose an option</option>
+              {f.options.map((o) => (
+                <option key={o.value} value={o.value}>
+                  {o.label}
+                </option>
+              ))}
+            </select>
+          ) : f.type === "password" ? (
+            <PasswordInput
+              name={f.key}
+              aria-label={f.label}
+              aria-invalid={invalidField === f.key || undefined}
+              aria-describedby={invalidField === f.key ? errorId : undefined}
+              defaultValue={f.value}
+              required={f.required !== false}
+              maxLength={128}
+              minLength={12}
+              autoComplete={
+                f.key === "currentPassword"
+                  ? "current-password"
+                  : "new-password"
+              }
+            />
+          ) : (
+            <input
+              name={f.key}
+              aria-label={f.label}
+              aria-invalid={invalidField === f.key || undefined}
+              aria-describedby={invalidField === f.key ? errorId : undefined}
+              type={f.type === "decimal" ? "text" : f.type || "text"}
+              inputMode={f.type === "decimal" ? "decimal" : undefined}
+              defaultValue={f.value}
+              required={f.required !== false}
+              maxLength={f.type === "password" ? 128 : 3000}
+              minLength={f.type === "password" ? 12 : undefined}
+              accept={
+                f.type === "file"
+                  ? ".pdf,.png,.jpg,.jpeg,.csv"
+                  : undefined
+              }
+            />
+          )}
+        </>
+      )}
+      {f.hint && <small>{f.hint}</small>}
+      {invalidField === f.key && <small id={errorId} className="field-error">{error}</small>}
+    </label>
+  );
   return (
     <Dialog title={spec.title} onClose={dismiss}>
       {spec.intro && <p className="intro">{spec.intro}</p>}
@@ -631,98 +745,13 @@ function Editor({ spec, onClose }: { spec: FormSpec; onClose: () => void }) {
           }
         }}
       >
-        {spec.fields.map((f) => f.type === "multiple" ? (
-          <OptionChecklist key={f.key} field={f} />
-        ) : (
-          <label
-            key={f.key}
-            className={f.type === "checkbox" ? "check-label" : ""}
-          >
-            {f.type === "checkbox" ? (
-              <>
-                <input
-                  name={f.key}
-                  aria-label={f.label}
-                  aria-invalid={invalidField === f.key || undefined}
-                  aria-describedby={invalidField === f.key ? errorId : undefined}
-                  type="checkbox"
-                  defaultChecked={f.value === "true"}
-                />
-                {f.label}
-              </>
-            ) : (
-              <>
-                <span>
-                  {f.label}
-                  {f.required === false ? " (optional)" : ""}
-                </span>
-                {f.type === "textarea" ? (
-                  <textarea
-                    name={f.key}
-                    aria-label={f.label}
-                    aria-invalid={invalidField === f.key || undefined}
-                    aria-describedby={invalidField === f.key ? errorId : undefined}
-                    defaultValue={f.value}
-                    required={f.required !== false}
-                    rows={4}
-                  />
-                ) : f.options ? (
-                  <select
-                    name={f.key}
-                    aria-label={f.label}
-                    aria-invalid={invalidField === f.key || undefined}
-                    aria-describedby={invalidField === f.key ? errorId : undefined}
-                    defaultValue={f.value || ""}
-                    required={f.required !== false}
-                  >
-                    <option value="" disabled>Choose an option</option>
-                    {f.options.map((o) => (
-                      <option key={o.value} value={o.value}>
-                        {o.label}
-                      </option>
-                    ))}
-                  </select>
-                ) : f.type === "password" ? (
-                  <PasswordInput
-                    name={f.key}
-                    aria-label={f.label}
-                    aria-invalid={invalidField === f.key || undefined}
-                    aria-describedby={invalidField === f.key ? errorId : undefined}
-                    defaultValue={f.value}
-                    required={f.required !== false}
-                    maxLength={128}
-                    minLength={12}
-                    autoComplete={
-                      f.key === "currentPassword"
-                        ? "current-password"
-                        : "new-password"
-                    }
-                  />
-                ) : (
-                  <input
-                    name={f.key}
-                    aria-label={f.label}
-                    aria-invalid={invalidField === f.key || undefined}
-                    aria-describedby={invalidField === f.key ? errorId : undefined}
-                    type={f.type === "decimal" ? "text" : f.type || "text"}
-                    inputMode={f.type === "decimal" ? "decimal" : undefined}
-                    defaultValue={f.value}
-                    required={f.required !== false}
-                    maxLength={f.type === "password" ? 128 : 3000}
-                    minLength={f.type === "password" ? 12 : undefined}
-                    accept={
-                      f.type === "file"
-                        ? ".pdf,.png,.jpg,.jpeg,.csv"
-                        : undefined
-                    }
-                  />
-                )}
-              </>
-            )}
-            {f.hint && <small>{f.hint}</small>}
-            {invalidField === f.key && <small id={errorId} className="field-error">{error}</small>}
-          </label>
-        ))}
+        {spec.fields.filter((field) => !spec.groupOptional || field.required !== false).map(renderField)}
+        {spec.groupOptional && spec.fields.some((field) => field.required === false) && (
+          <details ref={optionalDetails} className="editor-optional-details">
+            <summary>Optional details</summary>
+            <div>{spec.fields.filter((field) => field.required === false).map(renderField)}</div>
+          </details>
+        )}
         {error && !invalidField && (
           <p ref={errorRef} tabIndex={-1} role="alert" className="error">
             {error}
@@ -758,7 +787,6 @@ function readWorkspacePage() {
   try { return decodeURIComponent(location.hash.slice(1)) || "Overview"; }
   catch { return "Overview"; }
 }
-const compactWorkspace = "(max-width: 760px), (max-width: 920px) and (pointer: coarse)";
 function App() {
   const [user, setUser] = useState<User | null>(null);
   const [setup, setSetup] = useState(false);
@@ -781,6 +809,9 @@ function App() {
   const [form, setForm] = useState<FormSpec | null>(null);
   const [detail, setDetail] = useState<string | null>(null);
   const [menu, setMenu] = useState(false);
+  const [accountOpen, setAccountOpen] = useState(false);
+  const [selectionReviewOpen, setSelectionReviewOpen] = useState(false);
+  const [reviewedInventorySelection, setReviewedInventorySelection] = useState("");
   const [workspaceQuery, setWorkspaceQuery] = useState("");
   const openWorkspaceMenu = () => {
     setWorkspaceQuery("");
@@ -799,6 +830,9 @@ function App() {
   const [filterSheetOpen, setFilterSheetOpen] = useState(false);
   const [mobileSearchOpen, setMobileSearchOpen] = useState(false);
   const [inventoryPage, setInventoryPage] = useState(1);
+  useEffect(() => {
+    setReviewedInventorySelection("");
+  }, [selected, query, status, varietyFilter, locationFilter, evidenceFilter, sortBy, inventoryPage, viewMode]);
   const [collapsedSections, setCollapsedSections] = useState<
     Record<string, boolean>
   >({});
@@ -995,7 +1029,10 @@ function App() {
     setInventoryPage(1);
     setStatus("All stock");
     setSelected([]);
+    setSelectionReviewOpen(false);
+    setReviewedInventorySelection("");
     setMenu(false);
+    setAccountOpen(false);
     if (current !== "Inventory") {
       setMobileSearchOpen(false);
       setFocusInventorySearch(false);
@@ -1041,7 +1078,12 @@ function App() {
   const go = (p: string) => {
     if (!user || !access[p]?.includes(user.role)) return;
     setMobileSearchOpen(false);
-    location.hash = encodeURIComponent(p);
+    if (readWorkspacePage() !== p) {
+      const hash = `#${encodeURIComponent(p)}`;
+      // An intentional route change consumes the open sheet's history entry.
+      if (hasSheetHistory()) history.replaceState(null, "", hash);
+      else location.hash = hash;
+    }
     setPage(p);
     setMenu(false);
   };
@@ -1147,6 +1189,7 @@ function App() {
       intro:
         "Create a permanent record. Evidence and ownership must be reviewed before release to stock.",
       submit: "Receive as draft",
+      groupOptional: true,
       fields: [
         { key: "variety", label: "Gemstone variety", validationLabel: "Variety" },
         { key: "shape", label: "Shape", value: "Oval" },
@@ -1771,6 +1814,19 @@ function App() {
   ];
   const activeMobilePage = current;
   const moreIsCurrent = !mobileTabs.some((tab) => tab.page === activeMobilePage);
+  const workspaceSearch = workspaceQuery.trim().toLowerCase();
+  const workspaceTerms = workspaceSearch.split(/\s+/).filter(Boolean);
+  const matchingWorkspaces = visible.filter((destination) =>
+    workspaceTerms.every((term) =>
+      `${destination} ${workspaceKeywords[destination] || ""} ${descriptions[destination] || ""}`
+        .toLowerCase().includes(term)));
+  const rankedWorkspaces = [...matchingWorkspaces].sort((a, b) => {
+    const rank = (name: string) => name.toLowerCase() === workspaceSearch ? 0 :
+      workspaceKeywords[name]?.split(" ").includes(workspaceSearch) ? 1 :
+        name.toLowerCase().includes(workspaceSearch) ? 2 : 3;
+    return rank(a) - rank(b);
+  });
+  const workspaceMenuGroups = workspaceSearch ? [{ title: "Search results", pages: rankedWorkspaces }] : NAV_GROUPS;
   const pendingEvidence = stones.some((stone) => stone.evidence !== "Approved");
   const stockFilters = [
     { name: "Custody status", value: status === "All stock" ? "" : status, clear: () => setStatus("All stock") },
@@ -1778,8 +1834,11 @@ function App() {
     { name: "Location", value: locationFilter === "all" ? "" : locationFilter, clear: () => setLocationFilter("all") },
     { name: "Evidence", value: evidenceFilter === "all" ? "" :
         evidenceFilter === "Approved" ? "Disclosure approved" : evidenceFilter, clear: () => setEvidenceFilter("all") },
+    { name: "Sort order", value: sortBy === "default" ? "" : inventorySortLabels[sortBy], clear: () => setSortBy("default") },
   ].filter((filter) => filter.value);
-  const activeStockFilters = stockFilters.length + Number(sortBy !== "default");
+  const activeStockFilters = stockFilters.length;
+  const hasStockConstraints = Boolean(query.trim() || status !== "All stock" ||
+    varietyFilter !== "all" || locationFilter !== "all" || evidenceFilter !== "all");
   const clearStockFilters = () => {
     stockFilters.forEach((filter) => filter.clear());
     setSortBy("default");
@@ -1839,6 +1898,11 @@ function App() {
     (currentPage - 1) * PAGE_SIZE,
     currentPage * PAGE_SIZE,
   );
+  const visibleInventoryIds = new Set(paginatedInventory.map((stone) => str(stone, "id")));
+  const hiddenInventorySelection = selected.filter((id) => !visibleInventoryIds.has(id));
+  const selectionReviewKey = JSON.stringify([selected, hiddenInventorySelection]);
+  const needsSelectionReview = hiddenInventorySelection.length > 0 &&
+    reviewedInventorySelection !== selectionReviewKey;
   const stockStatusSummary = (
     <div className="status-summary">
       {STATES.filter((state) => state !== "In stock").map((state) => (
@@ -1851,6 +1915,8 @@ function App() {
   );
   return (
     <>
+      <MobileSheetHistory open={Boolean(menu || accountOpen || selectionReviewOpen ||
+        filterSheetOpen || form || (detail && s) || invoice || importPreview || mfa)} />
       <a className="skip" href="#main" onClick={(event) => {
         event.preventDefault();
         document.getElementById("main")?.focus();
@@ -2059,11 +2125,11 @@ function App() {
                   <button
                     type="button"
                     className="user-profile-pill"
-                    onClick={openWorkspaceMenu}
+                    onClick={() => setAccountOpen(true)}
                     title={`${user.name} (${user.role})`}
-                    aria-label={`${user.name.slice(0, 2).toUpperCase()} ${user.name} ${user.role} — account and workspaces`}
+                    aria-label={`${user.name.slice(0, 2).toUpperCase()} ${user.name} ${user.role} — account`}
                     aria-haspopup="dialog"
-                    aria-expanded={menu}
+                    aria-expanded={accountOpen}
                   >
                     <div className="user-avatar">{user.name.slice(0, 2).toUpperCase()}</div>
                     <div className="user-info desktop-only">
@@ -2521,7 +2587,17 @@ function App() {
                   {selected.length > 0 && (
                     <div className="selection-bar">
                       <strong role="status">{selected.length} {selected.length === 1 ? "stone" : "stones"} selected</strong>
-                      {can("Sales staff") && (
+                      {hiddenInventorySelection.length > 0 && (
+                        <>
+                          <p className="selection-scope" role="status">
+                            {selected.length - hiddenInventorySelection.length} on this page · {hiddenInventorySelection.length} outside this view
+                          </p>
+                          <button type="button" className="secondary" onClick={() => setSelectionReviewOpen(true)}>
+                            Review selected stones
+                          </button>
+                        </>
+                      )}
+                      {can("Sales staff") && !needsSelectionReview && (
                         <>
                           <button
                             type="button"
@@ -2562,9 +2638,9 @@ function App() {
                   )}
 
                   {/* The Paginated Stone Table or Grid (fixes F-01) */}
-                  {!inventoryView.length && (stockFilters.length || query.trim()) ? (
+                  {!inventoryView.length && hasStockConstraints ? (
                     <div className="empty">
-                      <p>No stones match this search.</p>
+                      <p>{query.trim() ? "No stones match this search." : "No stones match these filters."}</p>
                       <button type="button" className="text-button" onClick={clearStockFilters}>Clear search and filters</button>
                     </div>
                   ) : viewMode === "grid"
@@ -2572,7 +2648,7 @@ function App() {
                     : stoneTable(paginatedInventory, true)}
 
                   {/* Fully Functional Reactive Pagination Bar (fixes F-02) */}
-                  <div className="pagination-bar">
+                  {inventoryView.length > 0 && <div className="pagination-bar">
                     <div className="pagination-info" role="status" aria-atomic="true">
                       Showing{" "}
                       <strong>
@@ -2679,7 +2755,7 @@ function App() {
                         ›
                       </button>
                     </div>
-                  </div>
+                  </div>}
                 </section>
               </>
             )}
@@ -4323,7 +4399,7 @@ function App() {
       </nav>
 
       {menu && (
-        <Dialog title="Workspaces & settings" onClose={() => setMenu(false)}>
+        <Dialog title="Workspaces" onClose={() => setMenu(false)}>
           <div className="more-menu-content">
             <label className="workspace-finder">
               <span className="sr-only">Find a workspace</span>
@@ -4331,9 +4407,8 @@ function App() {
               <input type="search" placeholder="Find a workspace" value={workspaceQuery}
                 onChange={(event) => setWorkspaceQuery(event.target.value)} />
             </label>
-            {NAV_GROUPS.map((group) => {
-              const groupPages = group.pages.filter((p) => visible.includes(p) &&
-                p.toLowerCase().includes(workspaceQuery.trim().toLowerCase()));
+            {workspaceMenuGroups.map((group) => {
+              const groupPages = group.pages.filter((p) => matchingWorkspaces.includes(p));
               if (!groupPages.length) return null;
               return (
                 <div key={group.title} className="more-group">
@@ -4368,49 +4443,83 @@ function App() {
               );
             })}
 
-            {!visible.some((p) => p.toLowerCase().includes(workspaceQuery.trim().toLowerCase())) && (
+            {!matchingWorkspaces.length && (
               <p className="workspace-no-match muted" role="status">No matching workspaces.</p>
             )}
-            <div className="more-account-card">
-              <div className="more-account-header">
-                <div className="user-avatar">
-                  {user.name.slice(0, 2).toUpperCase()}
-                </div>
-                <div>
-                  <strong>{user.name}</strong>
-                  <p>
-                    {user.role} · {str(w.settings, "currency")}
-                  </p>
-                </div>
+          </div>
+        </Dialog>
+      )}
+
+      {accountOpen && (
+        <Dialog title="Account" className="account-dialog" onClose={() => setAccountOpen(false)}>
+          <div className="more-account-card">
+            <div className="more-account-header">
+              <div className="user-avatar">
+                {user.name.slice(0, 2).toUpperCase()}
               </div>
-              <div className="more-account-actions">
-                <button
-                  type="button"
-                  className="secondary"
-                  onClick={() => setTheme(theme === "light" ? "dark" : "light")}
-                >
-                  <Mark name={theme === "light" ? "moon" : "sun"} />
-                  <span>Appearance: {theme === "light" ? "Light" : "Dark"}</span>
-                </button>
-                <button
-                  type="button"
-                  className="text-button danger"
-                  onClick={() =>
-                    run(async () => {
-                      await request("/api/logout", {});
-                      setUser(null);
-                      setAnswer("");
-                      setAssistantError("");
-                      setW(null);
-                      setCsrf("");
-                      storeShowAuthority(null);
-                    }, "Signed out.")
-                  }
-                >
-                  Sign out
-                </button>
+              <div>
+                <strong>{user.name}</strong>
+                <p>
+                  {user.role} · {str(w.settings, "currency")}
+                </p>
               </div>
             </div>
+            <div className="more-account-actions">
+              <button
+                type="button"
+                className="secondary"
+                onClick={() => setTheme(theme === "light" ? "dark" : "light")}
+              >
+                <Mark name={theme === "light" ? "moon" : "sun"} />
+                <span>Appearance: {theme === "light" ? "Light" : "Dark"}</span>
+              </button>
+              <button
+                type="button"
+                className="text-button danger"
+                onClick={() =>
+                  run(async () => {
+                    await request("/api/logout", {});
+                    setAccountOpen(false);
+                    setUser(null);
+                    setAnswer("");
+                    setAssistantError("");
+                    setW(null);
+                    setCsrf("");
+                    storeShowAuthority(null);
+                  }, "Signed out.")
+                }
+              >
+                Sign out
+              </button>
+            </div>
+          </div>
+        </Dialog>
+      )}
+
+      {selectionReviewOpen && (
+        <Dialog title="Review selected stones" onClose={() => setSelectionReviewOpen(false)}>
+          <p className="intro">Check the stone IDs before using this selection. Stones outside the current view are included only if you confirm here.</p>
+          <ul className="selection-review-list">
+            {selected.map((id) => {
+              const stone = stones.find((record) => record.id === id);
+              return <li key={id}>
+                <strong>{stone ? str(stone, "variety") : "Record unavailable"}</strong>
+                <span>{id}</span>
+                <small>{visibleInventoryIds.has(id) ? "On this page" : "Outside this view"}</small>
+              </li>;
+            })}
+          </ul>
+          <div className="dialog-actions">
+            <button type="button" className="secondary" onClick={() => {
+              setSelected(selected.filter((id) => visibleInventoryIds.has(id)));
+              setSelectionReviewOpen(false);
+            }}>Keep only this page</button>
+            <button type="button" className="primary"
+              disabled={selected.some((id) => !stones.some((stone) => stone.id === id))}
+              onClick={() => {
+                setReviewedInventorySelection(selectionReviewKey);
+                setSelectionReviewOpen(false);
+              }}>Confirm selected stones</button>
           </div>
         </Dialog>
       )}
@@ -4516,13 +4625,9 @@ function App() {
                   setInventoryPage(1);
                 }}
               >
-                <option value="default">Default order</option>
-                <option value="weight-desc">Weight: High to Low</option>
-                <option value="weight-asc">Weight: Low to High</option>
-                {can("Sales staff") && <>
-                  <option value="price-desc">Price: High to Low</option>
-                  <option value="price-asc">Price: Low to High</option>
-                </>}
+                {Object.entries(inventorySortLabels)
+                  .filter(([value]) => !value.startsWith("price-") || can("Sales staff"))
+                  .map(([value, label]) => <option key={value} value={value}>{label}</option>)}
               </select>
             </div>
             <div className="dialog-actions">
@@ -5472,6 +5577,7 @@ function Buyer({ token }: { token: string }) {
   const [note, setNote] = useState("");
   const sendingRef = useRef(false);
   const updateButton = useRef<HTMLButtonElement>(null);
+  const responseHeading = useRef<HTMLHeadingElement>(null);
   const focusBuyerUpdate = useRef(false);
   const decisionInput = useRef<HTMLSelectElement>(null);
   useEffect(() => {
@@ -5513,6 +5619,11 @@ function Buyer({ token }: { token: string }) {
             {str(data, "business")} · Expires{" "}
             {new Date(str(data, "expires")).toLocaleDateString()}
           </p>
+          <a className="buyer-response-jump" href="#buyer-response" onClick={(event) => {
+            event.preventDefault();
+            responseHeading.current?.focus({ preventScroll: true });
+            responseHeading.current?.scrollIntoView({ block: "start" });
+          }}>{editing ? "Respond to this selection" : "Go to your response"}</a>
           <Table
             data={rows(data.stones)}
             columns={[
@@ -5535,17 +5646,15 @@ function Buyer({ token }: { token: string }) {
               },
               {
                 label: "Reviewed reports",
+                mobile: "full",
                 render: (s) =>
-                  rows(s.reports).length
-                    ? rows(s.reports).map((f) => (
-                        <a
-                          key={str(f, "id")}
-                          href={`/api/buyer/${token}/files/${f.id}`}
-                        >
-                          {str(f, "name")}
-                        </a>
-                      ))
-                    : "No original documents shared",
+                  rows(s.reports).length ? (
+                    <ul className="buyer-report-list">
+                      {rows(s.reports).map((f) => <li key={str(f, "id")}>
+                        <a href={`/api/buyer/${token}/files/${f.id}`}>{str(f, "name")}</a>
+                      </li>)}
+                    </ul>
+                  ) : "No original documents shared",
               },
               { label: "Price", render: (s) => baseMoney(s.price, str(s, "currency"), s.minorUnits, true) },
               {
@@ -5557,51 +5666,54 @@ function Buyer({ token }: { token: string }) {
               },
             ]}
           />
-          {notice && <p role="status">{notice}</p>}
-          {!editing && notice && (
-            <button ref={updateButton} className="secondary" onClick={() => {
-              setEditing(true);
-              requestAnimationFrame(() => decisionInput.current?.focus());
-            }}>
-              Update decision
-            </button>
-          )}
-          {editing && <form aria-busy={sending}
-            onSubmit={async (event) => {
-              event.preventDefault();
-              if (sendingRef.current) return;
-              sendingRef.current = true;
-              setSending(true);
-              setError("");
-              try {
-                await request(`/api/buyer/${token}`, { decision, note });
-                setNotice("Response recorded. A hold request does not reserve stock until Sales confirms.");
-                focusBuyerUpdate.current = true;
-                setEditing(false);
-              } catch (e) {
-                if (e instanceof ApiError && [404, 410].includes(e.status)) setUnavailable(true);
-                else setError((e as Error).message);
-              } finally {
-                setSending(false);
-                sendingRef.current = false;
-              }
-            }}
-          >
-            <label>
-              Your decision
-              <select ref={decisionInput} name="decision" value={decision} disabled={sending} onChange={(event) => setDecision(event.target.value)}>
-                <option>Interested</option>
-                <option>Request hold</option>
-                <option>Decline</option>
-              </select>
-            </label>
-            <label>
-              Message (optional)
-              <textarea name="note" maxLength={1000} value={note} disabled={sending} onChange={(event) => setNote(event.target.value)} />
-            </label>
-            {error && <p className="error" role="alert">{error}</p>}
-            <button className="primary" disabled={sending}>{sending ? "Sending…" : "Send decision"}</button>
-          </form>}
+          <section className="buyer-response" aria-labelledby="buyer-response">
+            <h2 id="buyer-response" tabIndex={-1} ref={responseHeading}>Your response</h2>
+            {notice && <p role="status">{notice}</p>}
+            {!editing && notice && (
+              <button ref={updateButton} className="secondary" onClick={() => {
+                setEditing(true);
+                requestAnimationFrame(() => decisionInput.current?.focus());
+              }}>
+                Update decision
+              </button>
+            )}
+            {editing && <form aria-busy={sending}
+              onSubmit={async (event) => {
+                event.preventDefault();
+                if (sendingRef.current) return;
+                sendingRef.current = true;
+                setSending(true);
+                setError("");
+                try {
+                  await request(`/api/buyer/${token}`, { decision, note });
+                  setNotice("Response recorded. A hold request does not reserve stock until Sales confirms.");
+                  focusBuyerUpdate.current = true;
+                  setEditing(false);
+                } catch (e) {
+                  if (e instanceof ApiError && [404, 410].includes(e.status)) setUnavailable(true);
+                  else setError((e as Error).message);
+                } finally {
+                  setSending(false);
+                  sendingRef.current = false;
+                }
+              }}
+            >
+              <label>
+                Your decision
+                <select ref={decisionInput} name="decision" value={decision} disabled={sending} onChange={(event) => setDecision(event.target.value)}>
+                  <option>Interested</option>
+                  <option>Request hold</option>
+                  <option>Decline</option>
+                </select>
+              </label>
+              <label>
+                Message (optional)
+                <textarea name="note" maxLength={1000} value={note} disabled={sending} onChange={(event) => setNote(event.target.value)} />
+              </label>
+              {error && <p className="error" role="alert">{error}</p>}
+              <button className="primary" disabled={sending}>{sending ? "Sending…" : "Send decision"}</button>
+            </form>}
+          </section>
         </>
       )}
     </main>

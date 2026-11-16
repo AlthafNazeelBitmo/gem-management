@@ -133,7 +133,7 @@ test("dirty intake guards Escape and backdrop, while live filters explain dismis
   await expect(dialog.getByText(/Changes apply immediately/)).toBeVisible();
   await dialog.getByLabel("Evidence", { exact: true }).selectOption("Conflict");
   await page.keyboard.press("Escape");
-  await expect(page.getByText("No stones match this search.")).toBeVisible();
+  await expect(page.getByText("No stones match these filters.")).toBeVisible();
   await page.getByRole("button", { name: "Clear search and filters" }).click();
   await expect(page.locator("tbody tr")).toHaveCount(8);
 });
@@ -261,7 +261,7 @@ test.describe("phone workspace finder", () => {
     await page.goto("/#Inventory");
     const more = page.getByRole("button", { name: "More workspaces" });
     await more.click();
-    const dialog = page.getByRole("dialog", { name: "Workspaces & settings" });
+    const dialog = page.getByRole("dialog", { name: "Workspaces" });
     const finder = dialog.getByRole("searchbox", { name: "Find a workspace" });
     await page.screenshot({ path: info.outputPath("phone-workspaces.png") });
     await finder.fill("no workspace here");
@@ -272,5 +272,158 @@ test.describe("phone workspace finder", () => {
     await expect(page.getByRole("heading", { name: "Purchasing", exact: true })).toBeVisible();
     await more.click();
     await expect(finder).toHaveValue("");
+  });
+});
+
+test.describe("mobile audit fixes", () => {
+  test.use({ viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true, reducedMotion: "reduce" });
+
+  test("hidden inventory selections require ID review before sale and reset when the view changes", async ({ page }) => {
+    await workspace(page);
+    await page.goto("/#Inventory");
+    await page.getByRole("checkbox", { name: "Select GEM-QA-1", exact: true }).check();
+    await page.getByRole("button", { name: "Page 2", exact: true }).tap();
+    await expect(page.getByText("0 on this page · 1 outside this view")).toBeVisible();
+    for (const name of ["Create sale", "Issue memo", "Share selection"])
+      await expect(page.getByRole("button", { name, exact: true })).toHaveCount(0);
+    await page.getByRole("button", { name: "Review selected stones" }).tap();
+    const review = page.getByRole("dialog", { name: "Review selected stones" });
+    await expect(review.getByRole("listitem")).toContainText("GEM-QA-1");
+    await review.getByRole("button", { name: "Confirm selected stones" }).tap();
+    await page.getByRole("button", { name: "Create sale", exact: true }).tap();
+    const sale = page.getByRole("dialog", { name: "Create sale" });
+    await expect(sale.getByRole("checkbox", { name: /GEM-QA-1 ·/ })).toBeChecked();
+    await sale.getByRole("button", { name: "Close dialog" }).tap();
+    await page.getByRole("button", { name: "Search inventory", exact: true }).tap();
+    await page.getByRole("searchbox", { name: "Search inventory" }).fill("no matching stones");
+    await page.getByRole("button", { name: "Done", exact: true }).tap();
+    await expect(page.getByText("No stones match this search.")).toBeVisible();
+    await expect(page.getByRole("button", { name: "Create sale", exact: true })).toHaveCount(0);
+    await page.getByRole("button", { name: "Review selected stones" }).tap();
+    await review.getByRole("button", { name: "Keep only this page" }).tap();
+    await expect(page.getByText("1 stone selected")).toHaveCount(0);
+  });
+
+  test("browser Back closes clean sheets and guards dirty intake without leaving Inventory", async ({ page }) => {
+    await workspace(page);
+    await page.goto("/#Overview");
+    await page.getByRole("navigation", { name: "Quick navigation" }).getByRole("button", { name: "Inventory" }).tap();
+    const stone = page.getByRole("button", { name: /Audit Sapphire.*GEM-QA-1 ·/ });
+    await stone.focus();
+    await stone.press("Enter");
+    await expect(page.getByRole("dialog", { name: "GEM-QA-1" })).toBeVisible();
+    await page.goBack();
+    await expect(page.getByRole("dialog")).toHaveCount(0);
+    await expect(page).toHaveURL(/#Inventory$/);
+    await expect(stone).toBeFocused();
+
+    await page.getByRole("button", { name: "Receive stock", exact: true }).tap();
+    const editor = page.getByRole("dialog");
+    const variety = editor.getByLabel("Gemstone variety");
+    await variety.fill("Unsaved fixture");
+    await page.goBack();
+    await expect(editor.getByRole("button", { name: "Keep editing" })).toBeFocused();
+    await expect(page).toHaveURL(/#Inventory$/);
+    await editor.getByRole("button", { name: "Keep editing" }).tap();
+    await expect(variety).toHaveValue("Unsaved fixture");
+    await page.goBack();
+    await editor.getByRole("button", { name: "Discard changes" }).tap();
+    await expect(editor).toHaveCount(0);
+    await expect.poll(() => page.evaluate(() => Boolean(history.state?.gemMobileSheet))).toBe(false);
+    await page.goBack();
+    await expect(page.getByRole("heading", { name: "Overview", exact: true })).toBeVisible();
+    await page.goForward();
+    await expect(page.getByRole("heading", { name: "Inventory", exact: true })).toBeVisible();
+    await expect(editor).toHaveCount(0);
+  });
+
+  test("browser Back returns from a nested editor to the detail sheet before leaving it", async ({ page }) => {
+    await workspace(page);
+    await page.goto("/#Inventory");
+    await page.getByRole("button", { name: /Audit Sapphire.*GEM-QA-1 ·/ }).tap();
+    await page.getByRole("dialog").getByRole("button", { name: "Add claim", exact: true }).tap();
+    await expect(page.getByRole("dialog").getByRole("heading", { name: "Add versioned claim" })).toBeVisible();
+    await page.goBack();
+    await expect(page.getByRole("dialog", { name: "GEM-QA-1" })).toBeVisible();
+    await page.goBack();
+    await expect(page.getByRole("dialog")).toHaveCount(0);
+    await expect(page).toHaveURL(/#Inventory$/);
+  });
+
+  test("profile opens account controls; workspace aliases obey role visibility", async ({ page }) => {
+    await workspace(page, { user: { ...owner, role: "Inventory clerk" } });
+    await page.goto("/");
+    await page.getByRole("button", { name: /— account$/ }).tap();
+    const account = page.getByRole("dialog", { name: "Account" });
+    await expect(account.getByRole("button", { name: /Appearance:/ })).toBeInViewport();
+    await expect(account.getByRole("button", { name: "Sign out" })).toBeInViewport();
+    await account.getByRole("button", { name: "Close dialog" }).tap();
+    await page.getByRole("button", { name: "More workspaces" }).tap();
+    const menu = page.getByRole("dialog", { name: "Workspaces" });
+    const finder = menu.getByRole("searchbox", { name: "Find a workspace" });
+    await finder.fill("stock");
+    await expect(menu.getByRole("button", { name: /^Inventory / })).toBeVisible();
+    await finder.fill("supplier");
+    await expect(menu.getByRole("button", { name: /^Purchasing / })).toBeVisible();
+    await finder.fill("invoice");
+    await expect(menu.getByRole("button", { name: /^Sales / })).toHaveCount(0);
+    await expect(menu.getByRole("status")).toContainText("No matching workspaces");
+  });
+
+  test("buyer documents have distinct touch targets and the response shortcut focuses the form heading", async ({ page }) => {
+    await page.route("**/api/buyer/mobile-fixture", (route) => route.fulfill({
+      json: { title: "Mobile buyer fixture", business: "Audit office", expires: "2099-04-05",
+        stones: stones.slice(0, 8).map((stone) => ({ ...stone, currency: "LKR", minorUnits: 2,
+          reports: [{ id: "A", name: "Original report.pdf" }, { id: "B", name: "Certification update.pdf" }] })) },
+    }));
+    await page.goto("/buyer/mobile-fixture");
+    const firstRow = page.getByRole("row").filter({ hasText: "GEM-QA-0" });
+    const first = firstRow.getByRole("link", { name: "Original report.pdf" });
+    const second = firstRow.getByRole("link", { name: "Certification update.pdf" });
+    await expect(first).toHaveAttribute("href", "/api/buyer/mobile-fixture/files/A");
+    await expect(second).toHaveAttribute("href", "/api/buyer/mobile-fixture/files/B");
+    const a = (await first.boundingBox())!;
+    const b = (await second.boundingBox())!;
+    expect(a.height).toBeGreaterThanOrEqual(44);
+    expect(b.y).toBeGreaterThanOrEqual(a.y + a.height + 6);
+    await page.getByRole("link", { name: "Respond to this selection" }).tap();
+    await expect(page.getByRole("heading", { name: "Your response" })).toBeFocused();
+  });
+
+  test("intake optional details are collapsed but retain their values", async ({ page }) => {
+    await workspace(page);
+    await page.goto("/#Inventory");
+    await page.getByRole("button", { name: "Receive stock", exact: true }).tap();
+    const editor = page.getByRole("dialog", { name: "Receive stock" });
+    const section = editor.getByText("Optional details", { exact: true });
+    const dimensions = editor.getByLabel("Dimensions", { exact: true });
+    await expect(dimensions).toBeHidden();
+    await section.tap();
+    await dimensions.fill("5 × 7 mm");
+    await section.tap();
+    await expect(dimensions).toBeHidden();
+    await section.tap();
+    await expect(dimensions).toHaveValue("5 × 7 mm");
+  });
+
+  test("short filter sheet keeps Done visible and exposes sorting separately in the chip list", async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 400 });
+    await workspace(page);
+    await page.goto("/#Inventory");
+    await page.getByRole("button", { name: "Filters", exact: true }).tap();
+    const filters = page.getByRole("dialog", { name: "Filters & sort" });
+    const done = filters.getByRole("button", { name: "Done" });
+    for (const dimensions of [{ width: 390, height: 400 }, { width: 844, height: 390 }]) {
+      await page.setViewportSize(dimensions);
+      await expect(done).toBeInViewport({ ratio: 1 });
+    }
+    await filters.getByLabel("Evidence", { exact: true }).selectOption("Conflict");
+    await filters.getByLabel("Sort Order").selectOption("weight-desc");
+    await filters.getByRole("button", { name: "Done" }).tap();
+    await expect(page.getByText("No stones match these filters.")).toBeVisible();
+    await expect(page.locator(".pagination-controls")).toHaveCount(0);
+    await expect(page.getByRole("button", { name: /remove Sort order filter/ })).toBeVisible();
+    await page.getByRole("button", { name: /remove Evidence filter/ }).tap();
+    await expect(page.getByRole("button", { name: "Filters (1)", exact: true })).toBeVisible();
   });
 });

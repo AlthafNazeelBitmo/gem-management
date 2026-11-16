@@ -345,3 +345,95 @@ select:focus-visible {
     transition: none;
   }
 }
+
+/* Keep the page's, selection's, and buyer's next actions distinct on phones. */
+.selection-scope {
+  flex-basis: 100%;
+  margin: 0;
+  color: var(--muted);
+  font-size: 13px;
+}
+.selection-review-list,
+.buyer-report-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+.selection-review-list li {
+  display: grid;
+  gap: 4px;
+  padding: 10px 0;
+  border-block-end: 1px solid var(--line);
+  overflow-wrap: anywhere;
+}
+.selection-review-list small {
+  color: var(--muted);
+}
+.account-dialog {
+  max-inline-size: 400px;
+}
+.account-dialog .more-account-card {
+  margin-block-start: 0;
+}
+.editor-optional-details {
+  border: 1px solid var(--line);
+  border-radius: var(--control-radius);
+  padding-inline: 12px;
+}
+.editor-optional-details > summary {
+  min-block-size: 44px;
+  padding-block: 12px;
+  cursor: pointer;
+  color: var(--accent-text);
+  font-weight: 600;
+}
+.editor-optional-details > div {
+  padding-block: 4px 8px;
+}
+.buyer-response-jump,
+.buyer-report-list a {
+  display: flex;
+  align-items: center;
+  min-block-size: 44px;
+  width: fit-content;
+  color: var(--accent-text);
+  overflow-wrap: anywhere;
+}
+.buyer-response-jump {
+  margin-block: 4px 16px;
+  font-weight: 600;
+}
+.buyer-report-list {
+  display: grid;
+  gap: 6px;
+}
+.buyer-report-list a {
+  width: 100%;
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  border-radius: var(--control-radius);
+  background: var(--control-fill);
+}
+.buyer-response {
+  max-width: 500px;
+  margin-block-start: 32px;
+}
+@media screen and (max-width: 760px), screen and (max-width: 920px) and (pointer: coarse) {
+  .inventory-filter-dialog {
+    padding-block-end: 0;
+    scroll-padding-block-end: calc(74px + var(--safe-bottom));
+  }
+  .inventory-filter-dialog .filter-sheet-body {
+    padding-block-end: 0;
+  }
+  .inventory-filter-dialog .dialog-actions {
+    position: sticky;
+    inset-block-end: 0;
+    margin-inline: calc(-1 * max(18px, var(--safe-left))) calc(-1 * max(18px, var(--safe-right)));
+    padding: 8px max(18px, var(--safe-right)) calc(8px + var(--safe-bottom)) max(18px, var(--safe-left));
+    background: var(--surface);
+  }
+  .inventory-filter-dialog .filter-sheet-field {
+    scroll-margin-block-end: calc(65px + var(--safe-bottom));
+  }
+}

@@ -167,17 +167,16 @@ test("phone shell reserves safe areas and stock keeps its identity, controls, an
   await expect(
     page.getByRole("region", { name: "Gemstone grid" }),
   ).toBeVisible();
-  await page.getByRole("button", { name: "More workspaces" }).focus();
-  await page.getByRole("button", { name: "More workspaces" }).press("Enter");
+  const profile = page.getByRole("button", { name: /— account$/ });
+  await profile.focus();
+  await profile.press("Enter");
   await page.getByRole("button", { name: "Appearance: Light" }).tap();
   await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
   await page
     .getByRole("dialog")
     .getByRole("button", { name: "Close dialog" })
     .tap();
-  await expect(
-    page.getByRole("button", { name: "More workspaces" }),
-  ).toBeFocused();
+  await expect(profile).toBeFocused();
   await page.screenshot({ path: info.outputPath("stock-dark.png") });
   expect(errors).toEqual([]);
 });
