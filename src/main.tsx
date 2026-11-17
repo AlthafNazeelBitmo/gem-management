@@ -1595,6 +1595,66 @@ function App() {
   if (!user)
     return (
       <main className={`auth-shell${setup ? " auth-setup" : ""}`}>
+        <section className="auth-showcase" aria-hidden="true">
+          <div className="auth-showcase-content">
+            <div className="auth-showcase-brand">
+              <div className="auth-showcase-logo">
+                <img src="/icons/gem-180.png" width="28" height="28" alt="" />
+              </div>
+              <span className="auth-showcase-title">Gem Management</span>
+            </div>
+
+            <div className="auth-showcase-hero">
+              <h2>{setup ? "CREATE WORKSPACE." : "WELCOME BACK."}</h2>
+              <p>
+                {setup
+                  ? "Initialize your owner account, base currency standards, and vault custody."
+                  : "Pick up where you left off and keep your precious gemstone inventory moving."}
+              </p>
+            </div>
+
+            <div className="auth-features">
+              <div className="auth-feature-item">
+                <div className="auth-feature-icon">
+                  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <rect x="2" y="7" width="20" height="14" rx="2" ry="2" />
+                    <path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16" />
+                  </svg>
+                </div>
+                <div className="auth-feature-text">
+                  <strong>Manage precious inventory</strong>
+                  <p>Parcels, carat weights, cuts, origins, and verified vault custody in one place.</p>
+                </div>
+              </div>
+
+              <div className="auth-feature-item">
+                <div className="auth-feature-icon">
+                  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+                    <path d="m9 12 2 2 4-4" />
+                  </svg>
+                </div>
+                <div className="auth-feature-text">
+                  <strong>Evidence & disclosure</strong>
+                  <p>Lab certificates, treatments, and reviewer-approved buyer selection packs.</p>
+                </div>
+              </div>
+
+              <div className="auth-feature-item">
+                <div className="auth-feature-icon">
+                  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <line x1="12" y1="1" x2="12" y2="23" />
+                    <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6" />
+                  </svg>
+                </div>
+                <div className="auth-feature-text">
+                  <strong>Sales & memo operations</strong>
+                  <p>Multi-currency invoicing, memo handoffs, and tamper-evident audit history.</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
         <header className="auth-top-bar">
           <div className="auth-top-brand">
             <div className="auth-logo-badge" aria-hidden="true">
@@ -1613,6 +1673,9 @@ function App() {
               height="64"
             />
             <p className="auth-brand">Gem Management</p>
+            <p className="auth-welcome-back">
+              {setup ? "Initial Setup" : "Welcome back to Gem Management"}
+            </p>
             <h1 id="auth-title">{setup ? "Create your workspace" : "Sign in"}</h1>
             <p>
               {setup
@@ -1783,7 +1846,11 @@ function App() {
               </p>
             )}
             <button className="primary auth-submit" disabled={refreshing}>
-              {refreshing ? "Opening…" : setup ? "Create workspace" : "Sign in"}
+              <span>{refreshing ? "Opening…" : setup ? "Create workspace" : "Sign in"}</span>
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <line x1="7" y1="17" x2="17" y2="7"/>
+                <polyline points="7 7 17 7 17 17"/>
+              </svg>
             </button>
           </form>
           {authCheckFailed && (
@@ -1791,6 +1858,37 @@ function App() {
               Retry connection
             </button>
           )}
+          <footer className="auth-switch-footer">
+            {setup ? (
+              <p>
+                Already have an account?{" "}
+                <button
+                  type="button"
+                  className="auth-switch-link"
+                  onClick={() => {
+                    setError("");
+                    setSetup(false);
+                  }}
+                >
+                  Sign in
+                </button>
+              </p>
+            ) : (
+              <p>
+                Don’t have a workspace account?{" "}
+                <button
+                  type="button"
+                  className="auth-switch-link"
+                  onClick={() => {
+                    setError("");
+                    setSetup(true);
+                  }}
+                >
+                  Create workspace
+                </button>
+              </p>
+            )}
+          </footer>
           {!setup && (
             <details className="auth-install">
               <summary>Add to iPhone Home Screen</summary>

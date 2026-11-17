@@ -126,3 +126,36 @@ test("setup header reserves the status-bar inset and stays in place while scroll
   await page.getByRole("button", { name: "Create workspace" }).scrollIntoViewIfNeeded();
   expect((await header.boundingBox())!.y).toBe(0);
 });
+
+test("desktop split layout displays left showcase benefits, arrow submit, and connects login with signup", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await page.route("**/api/auth", (route) =>
+    route.fulfill({ json: { setupRequired: false, user: null } }),
+  );
+  await page.goto("/");
+
+  const showcase = page.locator(".auth-showcase");
+  await expect(showcase).toBeVisible();
+  await expect(showcase.getByText("Manage precious inventory")).toBeVisible();
+  await expect(showcase.getByText("Evidence & disclosure")).toBeVisible();
+  await expect(showcase.getByText("Sales & memo operations")).toBeVisible();
+
+  await expect(page.locator(".auth-welcome-back")).toHaveText("Welcome back to Gem Management");
+  await expect(page.getByRole("button", { name: /Sign in/i })).toBeVisible();
+
+  const createLink = page.getByRole("button", { name: "Create workspace" });
+  await expect(createLink).toBeVisible();
+  await createLink.click();
+
+  await expect(page.getByRole("heading", { name: "Create your workspace" })).toBeVisible();
+  await expect(showcase.locator("h2")).toHaveText("CREATE WORKSPACE.");
+
+  const signInLink = page.locator(".auth-switch-link", { hasText: "Sign in" });
+  await expect(signInLink).toBeVisible();
+  await signInLink.click();
+
+  await expect(page.getByRole("heading", { name: "Sign in" })).toBeVisible();
+  await expect(showcase.locator("h2")).toHaveText("WELCOME BACK.");
+});
