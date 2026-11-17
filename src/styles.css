@@ -2206,6 +2206,7 @@ footer.workspace-footer {
   border: 1px solid var(--line);
   border-radius: 16px;
   background: var(--surface);
+  align-content: start;
 }
 .auth-group legend {
   padding-inline: 5px;
@@ -2234,9 +2235,12 @@ footer.workspace-footer {
   inset-block: 2px;
   min-height: 44px;
 }
+.auth-shell .auth-fields .auth-password .password-field input {
+  padding-right: 70px;
+}
 .auth-currency {
   display: grid;
-  grid-template-columns: minmax(0, 1.45fr) minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1fr);
   align-items: end;
   gap: 10px;
 }
@@ -2329,27 +2333,26 @@ footer.workspace-footer {
     background: var(--surface);
   }
 }
-@media (min-width: 860px) {
+@media (min-width: 1100px) {
   .auth-top-bar {
     display: none;
   }
   .auth-shell {
     display: grid;
-    grid-template-columns: minmax(380px, 1.05fr) minmax(460px, 1.25fr);
+    grid-template-columns: minmax(340px, 0.85fr) minmax(0, 1.35fr);
     min-height: 100dvh;
-    height: 100dvh;
     padding: 0;
     margin: 0;
-    overflow: hidden;
     background: var(--surface);
     align-content: stretch;
     justify-items: stretch;
+    align-items: start;
   }
   .auth-showcase {
     display: flex;
     flex-direction: column;
     justify-content: center;
-    height: 100%;
+    height: 100dvh;
     padding: clamp(36px, 5vw, 68px);
     background:
       radial-gradient(circle at 85% 15%, rgba(92, 88, 232, 0.4) 0%, transparent 55%),
@@ -2357,7 +2360,8 @@ footer.workspace-footer {
       linear-gradient(145deg, #120238 0%, #270286 52%, #09011d 100%);
     color: #ffffff;
     box-sizing: border-box;
-    position: relative;
+    position: sticky;
+    top: 0;
     overflow: hidden;
   }
   .auth-showcase::after {
@@ -2452,14 +2456,13 @@ footer.workspace-footer {
   }
 
   /* Right Side Form */
-  .auth-form {
+  .auth-form,
+  .auth-setup .auth-form {
     display: flex;
     flex-direction: column;
-    justify-content: center;
     align-items: center;
-    height: 100%;
-    overflow-y: auto;
-    padding: clamp(28px, 4vw, 56px);
+    min-height: 100dvh;
+    padding: 32px clamp(24px, 3vw, 48px);
     background: var(--surface);
     box-sizing: border-box;
     width: 100%;
@@ -2467,9 +2470,16 @@ footer.workspace-footer {
   }
   .auth-form > * {
     width: min(100%, 420px);
+    flex-shrink: 0;
   }
   .auth-setup .auth-form > * {
-    width: min(100%, 560px);
+    width: min(100%, 680px);
+  }
+  .auth-form > :first-child {
+    margin-top: auto;
+  }
+  .auth-form > :last-child {
+    margin-bottom: auto;
   }
   .auth-heading {
     text-align: center;
@@ -2487,7 +2497,7 @@ footer.workspace-footer {
     font-weight: 700;
     letter-spacing: 0.08em;
     text-transform: uppercase;
-    color: var(--accent);
+    color: var(--accent-text);
     margin: 0 0 6px;
   }
   .auth-heading h1 {
@@ -2549,13 +2559,13 @@ footer.workspace-footer {
   }
   .auth-setup .auth-fields {
     display: grid;
-    grid-template-columns: 1fr 1fr;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 14px;
     align-items: stretch;
   }
   .auth-setup .auth-group {
-    padding: 13px 15px;
-    gap: 9px;
+    padding: 16px;
+    gap: 14px;
     border-radius: 12px;
     box-shadow: 0 2px 10px -2px rgba(15, 23, 42, 0.04);
   }
@@ -2565,33 +2575,34 @@ footer.workspace-footer {
     margin-bottom: 2px;
   }
   .auth-setup .auth-fields label {
-    font-size: 12px;
+    font-size: 14px;
     font-weight: 500;
   }
   .auth-setup .auth-fields :is(input:not([type="checkbox"]), select) {
-    min-height: 38px;
-    font-size: 13.5px;
-    padding: 6px 10px;
+    min-height: 44px;
+    font-size: 14px;
+    padding: 10px 12px;
     border-radius: 8px;
   }
   .auth-setup .auth-password .password-field button {
-    min-height: 34px;
+    min-height: 40px;
   }
   .auth-setup .auth-password > small {
-    font-size: 11px;
+    font-size: 12px;
     margin-top: 2px;
   }
   .auth-setup .auth-currency {
-    gap: 8px;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 14px;
   }
   .auth-setup .auth-training.check-label {
     min-height: 36px;
-    font-size: 12px;
+    font-size: 14px;
     margin-top: 2px;
     padding-block: 2px;
   }
   .auth-setup .auth-group small {
-    font-size: 11px;
+    font-size: 12px;
     line-height: 1.35;
   }
   .auth-setup .auth-submit.primary {

@@ -1,5 +1,13 @@
 # Gem Management UI direction
 
+## Authentication layout maintenance
+
+- Keep ENERGY 1 / RHYTHM 2 / MOTION 1 and the existing system typography and indigo identity.
+- Show the split authentication layout from 1100px; smaller windows use one centered form so setup fields remain readable rather than compressed.
+- Let the desktop form fill its grid track, stack currency settings, and top-align fieldset contents so labels and inputs align without truncating the currency prompt.
+- Use document scrolling and safe automatic margins instead of a fixed-height, clipped form so headings, validation errors, and account-switch links remain reachable on short screens.
+- Reserve password-toggle space inside the input so entered text cannot overlap the Show/Hide button; retain existing accessible control names and keyboard behavior.
+
 The user's current direction is a professional, minimal interface using the installed Apple design and design skills, with antislop applied during implementation. The supplied Bitmo palette remains the source for brand colors. Company logos remain omitted.
 
 Reading this as a professional stock workspace with Apple's clarity and restraint. ENERGY 1 / RHYTHM 2 / MOTION 1.

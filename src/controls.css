@@ -441,7 +441,7 @@ select:focus-visible {
 .auth-top-bar {
   display: none;
 }
-@media screen and (max-width: 760px), screen and (max-width: 920px) and (pointer: coarse) {
+@media screen and (max-width: 1099px) {
   html:has(.auth-shell) {
     --auth-bar-height: 42px;
     scroll-padding-block-start: calc(var(--safe-top) + var(--auth-bar-height) + 12px);
