@@ -37,12 +37,29 @@ test("persistent parcel journey, buyer-safe sharing, navigation and responsive a
   await expect(
     page.getByLabel("Use this workspace for training and demonstrations"),
   ).not.toBeChecked();
+  const ownerBox = (await page.getByRole("group", { name: "Owner account" }).boundingBox())!;
+  const settingsBox = (await page.getByRole("group", { name: "Workspace settings" }).boundingBox())!;
+  expect(ownerBox).toBeTruthy();
+  expect(settingsBox).toBeTruthy();
+  expect(Math.abs(ownerBox.y - settingsBox.y)).toBeLessThan(10);
+  expect(settingsBox.x).toBeGreaterThan(ownerBox.x);
+  const isScrollable = await page.evaluate(
+    () => document.documentElement.scrollHeight > window.innerHeight,
+  );
+  expect(isScrollable).toBe(false);
   await page
     .getByRole("button", { name: "Create workspace", exact: true })
     .click();
   await expect(
     page.getByRole("heading", { name: "Overview", exact: true }),
   ).toBeVisible();
+  const sidebarBg = await page.locator(".sidebar").evaluate(
+    (el) => window.getComputedStyle(el).backgroundColor,
+  );
+  const toolbarBg = await page.locator(".toolbar").evaluate(
+    (el) => window.getComputedStyle(el).backgroundColor,
+  );
+  expect(sidebarBg).toBe(toolbarBg);
   await page
     .getByRole("button", { name: "Receive stock", exact: true })
     .click();

@@ -57,6 +57,7 @@ export const pgPool = process.env.DATABASE_URL
       connectionString: process.env.DATABASE_URL,
       ssl: { rejectUnauthorized: false },
       max: 10,
+      connectionTimeoutMillis: 5000,
     })
   : null;
 

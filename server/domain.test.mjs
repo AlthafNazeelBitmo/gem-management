@@ -69,11 +69,18 @@ async function release(s) {
 }
 before(async () => {
   server = spawn(process.execPath, ["server/index.mjs"], {
-    env: { ...process.env, DATA_DIR: directory, API_PORT: String(port) },
+    env: {
+      ...process.env,
+      DATA_DIR: directory,
+      API_PORT: String(port),
+      DATABASE_URL: "",
+      NEON_REALTIME_SECRET: "",
+    },
     stdio: ["ignore", "pipe", "pipe"],
   });
   let logs = "";
   server.stderr.on("data", (d) => (logs += d));
+  server.stdout.on("data", (d) => (logs += d));
   for (let i = 0; i < 80; i++) {
     try {
       const r = await fetch(base + "/api/health");

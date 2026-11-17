@@ -1596,8 +1596,12 @@ function App() {
     return (
       <main className={`auth-shell${setup ? " auth-setup" : ""}`}>
         <header className="auth-top-bar">
-          <img src="/icons/gem-180.png" width="22" height="22" alt="" />
-          <span>Gem Management</span>
+          <div className="auth-top-brand">
+            <div className="auth-logo-badge" aria-hidden="true">
+              <img src="/icons/gem-180.png" width="20" height="20" alt="" />
+            </div>
+            <span>Gem Management</span>
+          </div>
         </header>
         <section className="auth-form" aria-labelledby="auth-title">
           <header className="auth-heading">
@@ -2027,36 +2031,38 @@ function App() {
           <header className="toolbar">
             {mobileSearchOpen ? (
               <div className="mobile-search-active-bar">
-                <Mark name="search" />
-                <input
-                  ref={mobileSearchRef}
-                  type="search"
-                  enterKeyHint="search"
-                  aria-label="Search inventory"
-                  value={query}
-                  onChange={(e) => setInventoryQuery(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === "Escape" || e.key === "Enter") {
-                      setFocusSearchTrigger(true);
-                      setMobileSearchOpen(false);
-                    }
-                  }}
-                  placeholder="Search inventory"
-                  className="mobile-search-input"
-                />
-                {query && (
-                  <button
-                    type="button"
-                    className="search-clear-btn"
-                    aria-label="Clear search"
-                    onClick={() => {
-                      setQuery("");
-                      mobileSearchRef.current?.focus();
+                <div className="mobile-search-input-wrap">
+                  <Mark name="search" />
+                  <input
+                    ref={mobileSearchRef}
+                    type="search"
+                    enterKeyHint="search"
+                    aria-label="Search inventory"
+                    value={query}
+                    onChange={(e) => setInventoryQuery(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Escape" || e.key === "Enter") {
+                        setFocusSearchTrigger(true);
+                        setMobileSearchOpen(false);
+                      }
                     }}
-                  >
-                    ✕
-                  </button>
-                )}
+                    placeholder="Search inventory"
+                    className="mobile-search-input"
+                  />
+                  {query && (
+                    <button
+                      type="button"
+                      className="search-clear-btn"
+                      aria-label="Clear search"
+                      onClick={() => {
+                        setQuery("");
+                        mobileSearchRef.current?.focus();
+                      }}
+                    >
+                      ✕
+                    </button>
+                  )}
+                </div>
                 <button
                   type="button"
                   className="text-button mobile-search-done-btn"
@@ -2071,8 +2077,13 @@ function App() {
             ) : (
               <>
                 <div className="mobile-toolbar-brand mobile-only">
-                  <GemLogo />
-                  <span className="mobile-toolbar-title">Gem Management</span>
+                  <div className="mobile-brand-icon-wrap" aria-hidden="true">
+                    <GemLogo />
+                  </div>
+                  <div className="mobile-toolbar-headings">
+                    <span className="mobile-toolbar-title">{current}</span>
+                    <span className="mobile-toolbar-subtitle">Gem Management</span>
+                  </div>
                 </div>
 
                 <div className="toolbar-start">
@@ -4350,9 +4361,16 @@ function App() {
                 </section>
               </>
             )}
-            <footer>
-              Persistent local workspace · {str(w.settings, "currency")} ·{" "}
-              {user.role}
+            <footer className="workspace-footer">
+              <div className="footer-status-badge">
+                <span className="status-indicator-dot" aria-hidden="true" />
+                <span className="footer-status-text">Neon Lakebase Postgres</span>
+                <span className="footer-sep">·</span>
+                <span>{str(w.settings, "currency")}</span>
+                <span className="footer-sep">·</span>
+                <span>{user.role}</span>
+              </div>
+              <p className="footer-subtext">Gem Management Workspace · Cryptographically Audited</p>
             </footer>
           </div>
         </main>
@@ -5608,8 +5626,15 @@ function Buyer({ token }: { token: string }) {
   }, [token]);
   return (
     <main className="buyer-page">
-      <p className="muted">Private buyer selection</p>
-      <h1>{unavailable ? "Selection unavailable" : data ? str(data, "title") : loadError ? "Could not open selection" : "Opening selection…"}</h1>
+      <header className="buyer-header">
+        <div className="buyer-brand-badge" aria-hidden="true">
+          <img src="/icons/gem-180.png" width="24" height="24" alt="" />
+        </div>
+        <div>
+          <p className="buyer-kicker">Private buyer selection</p>
+          <h1 className="buyer-title">{unavailable ? "Selection unavailable" : data ? str(data, "title") : loadError ? "Could not open selection" : "Opening selection…"}</h1>
+        </div>
+      </header>
       {unavailable ? (
         <p role="alert">This link has expired or is no longer available. Ask your sales contact for a new link.</p>
       ) : loadError && (
@@ -5720,6 +5745,9 @@ function Buyer({ token }: { token: string }) {
           </section>
         </>
       )}
+      <footer className="buyer-footer">
+        <p>Gem Management Workspace · Secure Disclosure Portal</p>
+      </footer>
     </main>
   );
 }
